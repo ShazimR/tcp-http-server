@@ -3,25 +3,24 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"net"
 )
 
-func getLinesReader(f io.ReadCloser) <- chan string {
+func getLinesReader(c net.Conn) <- chan string {
 	out := make(chan string, 1)
 
 	go func() {
-		defer f.Close()
+		defer c.Close()
 		defer close(out)
 		
 		str := ""
+		buf := make([]byte, 8)
 		for {
-			data := make([]byte, 8)
-			n, err := f.Read(data)
+			n, err := c.Read(buf)
 
 			if n > 0 {
-				data = data[:n]
+				data := buf[:n]
 				for {
 					i := bytes.IndexByte(data, '\n')
 					if i == -1 {
@@ -63,8 +62,11 @@ func main() {
 			continue
 		}
 
-		for line := range getLinesReader(conn) {
-			fmt.Printf("read: %s\n", line)
-		}
+		go func(c net.Conn) {
+			defer c.Close()
+			for line := range getLinesReader(c) {
+				fmt.Printf("read: %s\n", line)
+			}
+		}(conn)
 	}
 }
