@@ -65,7 +65,7 @@ func main() {
 		go func(c net.Conn) {
 			defer c.Close()
 			for line := range getLinesReader(c) {
-				fmt.Printf("read: %s\n", line)
+				fmt.Printf("%s\n", line)
 			}
 		}(conn)
 	}
