@@ -1,55 +1,13 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"log"
 	"net"
+
+	"github.com/ShazimR/tcp-http-server/internal/request"
 )
-
-func getLinesReader(c io.ReadCloser) <-chan string {
-	out := make(chan string, 1)
-
-	go func() {
-		defer c.Close()
-		defer close(out)
-
-		str := ""
-		buf := make([]byte, 8)
-		for {
-			n, err := c.Read(buf)
-
-			if n > 0 {
-				data := buf[:n]
-				for {
-					i := bytes.IndexByte(data, '\n')
-					if i == -1 {
-						break
-					}
-
-					str += string(data[:i])
-					out <- str
-					str = ""
-
-					data = data[i+1:]
-				}
-
-				str += string(data)
-			}
-
-			if err != nil {
-				break
-			}
-		}
-
-		if len(str) != 0 {
-			out <- str
-		}
-	}()
-
-	return out
-}
 
 func main() {
 	listener, err := net.Listen("tcp", ":8080")
@@ -60,14 +18,23 @@ func main() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
+			fmt.Printf("error: %e", err)
 			continue
 		}
 
 		go func(c io.ReadCloser) {
 			defer c.Close()
-			for line := range getLinesReader(c) {
-				fmt.Printf("%s\n", line)
+
+			r, err := request.RequestFromReader(c)
+			if err != nil {
+				fmt.Printf("error: %e", err)
+				return
 			}
+
+			fmt.Printf("Request Line:\n")
+			fmt.Printf("- Method:  %s\n", r.RequestLine.Method)
+			fmt.Printf("- Target:  %s\n", r.RequestLine.RequestTarget)
+			fmt.Printf("- Version: %s\n", r.RequestLine.HttpVersion)
 		}(conn)
 	}
 }
