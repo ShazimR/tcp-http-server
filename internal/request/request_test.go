@@ -9,9 +9,9 @@ import (
 )
 
 type chunkReader struct {
-	data 			string
+	data            string
 	numBytesPerRead int
-	pos 			int
+	pos             int
 }
 
 // Simulates reading a variable number of bytes per chunk from a network
@@ -19,7 +19,7 @@ func (cr *chunkReader) Read(p []byte) (n int, err error) {
 	if cr.pos >= len(cr.data) {
 		return 0, io.EOF
 	}
-	endIndex := min(cr.pos + cr.numBytesPerRead, len(cr.data))
+	endIndex := min(cr.pos+cr.numBytesPerRead, len(cr.data))
 	n = copy(p, cr.data[cr.pos:endIndex])
 	cr.pos += n
 	if n > cr.numBytesPerRead {
@@ -32,7 +32,7 @@ func (cr *chunkReader) Read(p []byte) (n int, err error) {
 func TestRequestLineParse(t *testing.T) {
 	// Test: Good GET Request line
 	reader := &chunkReader{
-		data: "GET / HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
+		data:            "GET / HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
 		numBytesPerRead: 3,
 	}
 	r, err := RequestFromReader(reader)
@@ -44,7 +44,7 @@ func TestRequestLineParse(t *testing.T) {
 
 	// Test: Good GET Request line with path
 	reader = &chunkReader{
-		data: "GET /coffee HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
+		data:            "GET /coffee HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
 		numBytesPerRead: 1,
 	}
 	r, err = RequestFromReader(reader)
@@ -57,7 +57,7 @@ func TestRequestLineParse(t *testing.T) {
 	// Test: Invalid number of parts in the request line
 	testReq := "/coffee HTTP/1.1\r\nHost: localhost:8080\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n"
 	reader = &chunkReader{
-		data: testReq,
+		data:            testReq,
 		numBytesPerRead: len(testReq),
 	}
 	r, err = RequestFromReader(reader)
@@ -67,7 +67,7 @@ func TestRequestLineParse(t *testing.T) {
 
 	// Test: Invalid HTTP version
 	reader = &chunkReader{
-		data: "GET / HTTP/2.0\r\nHost: localhost:8080\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
+		data:            "GET / HTTP/2.0\r\nHost: localhost:8080\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
 		numBytesPerRead: 3,
 	}
 	r, err = RequestFromReader(reader)

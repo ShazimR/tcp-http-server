@@ -8,13 +8,13 @@ import (
 	"net"
 )
 
-func getLinesReader(c io.ReadCloser) <- chan string {
+func getLinesReader(c io.ReadCloser) <-chan string {
 	out := make(chan string, 1)
 
 	go func() {
 		defer c.Close()
 		defer close(out)
-		
+
 		str := ""
 		buf := make([]byte, 8)
 		for {
@@ -47,7 +47,7 @@ func getLinesReader(c io.ReadCloser) <- chan string {
 			out <- str
 		}
 	}()
-	
+
 	return out
 }
 

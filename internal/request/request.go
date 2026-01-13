@@ -19,7 +19,7 @@ type RequestLine struct {
 
 type Request struct {
 	RequestLine RequestLine
-	state 		parserState
+	state       parserState
 }
 
 var (
@@ -31,7 +31,7 @@ var (
 type parserState int
 
 const (
-	StateInit  parserState = iota
+	StateInit parserState = iota
 	StateDone
 	StateError
 )
@@ -101,7 +101,7 @@ func parseRequestLine(b []byte) (*RequestLine, int, error) {
 	}
 
 	requestLine := &RequestLine{
-		Method: 	   string(parts[0]),
+		Method:        string(parts[0]),
 		RequestTarget: string(parts[1]),
 		HttpVersion:   string(httpParts[1]),
 	}
@@ -113,7 +113,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	request := newRequest()
 
 	// NOTE: buffer could get overrun
-	buf := make ([]byte, 1024)
+	buf := make([]byte, 1024)
 	bufLen := 0
 	for !request.done() {
 		n, err := reader.Read(buf[bufLen:])
@@ -123,7 +123,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		}
 
 		bufLen += n
-		readN, err := request.parse(buf[:bufLen + n])
+		readN, err := request.parse(buf[:bufLen+n])
 		if err != nil {
 			return nil, err
 		}
