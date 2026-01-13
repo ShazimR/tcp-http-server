@@ -1,0 +1,18 @@
+Request Line:
+- Method:  GET
+- Target:  /
+- Version: 1.1
+Headers:
+- host: localhost:8080
+- user-agent: curl/7.81.0
+- accept: */*
+Request Line:
+- Method:  POST
+- Target:  /shazim/rahman
+- Version: 1.1
+Headers:
+- host: localhost:8080
+- user-agent: curl/7.81.0
+- accept: */*
+- content-type: application/json
+- content-length: 14

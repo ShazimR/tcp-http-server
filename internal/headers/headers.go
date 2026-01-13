@@ -24,11 +24,11 @@ func isToken(str []byte) bool {
 		if ch >= 'A' && ch <= 'Z' ||
 			ch >= 'a' && ch <= 'z' ||
 			ch >= '0' && ch <= 'z' {
-				found = true
+			found = true
 		}
 		switch ch {
-			case '_', ':', ';', '.', ',', '\\', '/', '"', '\'', '?', '!', '(', ')', '{', '}', '[', ']', '@', '<', '>', '=', '-', '+', '*', '#', '$', '&', '`', '|', '~', '^', '%':
-				found = true
+		case '_', ':', ';', '.', ',', '\\', '/', '"', '\'', '?', '!', '(', ')', '{', '}', '[', ']', '@', '<', '>', '=', '-', '+', '*', '#', '$', '&', '`', '|', '~', '^', '%':
+			found = true
 		}
 
 		if !found {
@@ -70,11 +70,17 @@ func (h *Headers) Get(name string) string {
 
 func (h *Headers) Set(name string, value string) {
 	name = strings.ToLower(name)
-	
+
 	if v, ok := h.headers[name]; ok {
 		h.headers[name] = fmt.Sprintf("%s,%s", v, value)
 	} else {
 		h.headers[name] = value
+	}
+}
+
+func (h *Headers) ForEach(cb func(name, value string)) {
+	for n, v := range h.headers {
+		cb(n, v)
 	}
 }
 
@@ -95,7 +101,7 @@ func (h *Headers) Parse(data []byte) (int, bool, error) {
 			break
 		}
 
-		name, value, err := parseHeader(data[read:read+idx])
+		name, value, err := parseHeader(data[read : read+idx])
 		if err != nil {
 			return 0, false, err
 		}
