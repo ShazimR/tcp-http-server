@@ -3,11 +3,12 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net"
 )
 
-func getLinesReader(c net.Conn) <- chan string {
+func getLinesReader(c io.ReadCloser) <- chan string {
 	out := make(chan string, 1)
 
 	go func() {
@@ -62,7 +63,7 @@ func main() {
 			continue
 		}
 
-		go func(c net.Conn) {
+		go func(c io.ReadCloser) {
 			defer c.Close()
 			for line := range getLinesReader(c) {
 				fmt.Printf("%s\n", line)
