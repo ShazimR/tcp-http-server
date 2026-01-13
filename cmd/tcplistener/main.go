@@ -18,7 +18,7 @@ func main() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			fmt.Printf("error: %e", err)
+			fmt.Printf("error: %s", err)
 			continue
 		}
 
@@ -27,7 +27,7 @@ func main() {
 
 			r, err := request.RequestFromReader(c)
 			if err != nil {
-				fmt.Printf("error: %e", err)
+				fmt.Printf("error: %s", err)
 				return
 			}
 
