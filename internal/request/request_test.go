@@ -60,6 +60,18 @@ func TestRequestLineParse(t *testing.T) {
 		data: testReq,
 		numBytesPerRead: len(testReq),
 	}
-	_, err = RequestFromReader(reader)
+	r, err = RequestFromReader(reader)
 	require.Error(t, err)
+	require.Nil(t, r)
+	assert.Equal(t, ErrMalformedRequestLine, err)
+
+	// Test: Invalid HTTP version
+	reader = &chunkReader{
+		data: "GET / HTTP/2.0\r\nHost: localhost:8080\r\nUser-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n",
+		numBytesPerRead: 3,
+	}
+	r, err = RequestFromReader(reader)
+	require.Error(t, err)
+	require.Nil(t, r)
+	assert.Equal(t, ErrUnsupportedVersion, err)
 }
