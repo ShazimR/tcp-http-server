@@ -61,7 +61,7 @@ func newRequest() *Request {
 	return &Request{
 		state:   StateInit,
 		Headers: headers.NewHeaders(),
-		Body:    []byte(""),
+		Body:    []byte{},
 	}
 }
 
