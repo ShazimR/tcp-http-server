@@ -1,18 +1,22 @@
 Request Line:
 - Method:  GET
-- Target:  /
+- Target:  /shazimr
 - Version: 1.1
 Headers:
 - host: localhost:8080
 - user-agent: curl/7.81.0
 - accept: */*
+Body:
+
 Request Line:
 - Method:  POST
-- Target:  /shazim/rahman
+- Target:  /shazimr
 - Version: 1.1
 Headers:
-- host: localhost:8080
 - user-agent: curl/7.81.0
 - accept: */*
 - content-type: application/json
 - content-length: 14
+- host: localhost:8080
+Body:
+{"key": "val"}

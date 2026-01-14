@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 
 	"github.com/ShazimR/tcp-http-server/internal/headers"
 )
@@ -22,6 +23,7 @@ type RequestLine struct {
 type Request struct {
 	RequestLine RequestLine
 	Headers     *headers.Headers
+	Body        []byte
 	state       parserState
 }
 
@@ -36,19 +38,41 @@ type parserState int
 const (
 	StateInit parserState = iota
 	StateHeaders
+	StateBody
 	StateDone
 	StateError
 )
+
+func getInt(headers *headers.Headers, name string, defaultValue int) int {
+	valueStr, exists := headers.Get(name)
+	if !exists {
+		return defaultValue
+	}
+
+	value, err := strconv.Atoi(valueStr)
+	if err != nil {
+		return defaultValue
+	}
+
+	return value
+}
 
 func newRequest() *Request {
 	return &Request{
 		state:   StateInit,
 		Headers: headers.NewHeaders(),
+		Body:    []byte(""),
 	}
 }
 
 func (r *Request) done() bool {
 	return r.state == StateDone || r.state == StateError
+}
+
+func (r *Request) hasBody() bool {
+	// TODO: when doing chunked encoding, update this
+	length := getInt(r.Headers, "content-length", 0)
+	return length > 0
 }
 
 func (r *Request) parse(data []byte) (int, error) {
@@ -57,6 +81,9 @@ func (r *Request) parse(data []byte) (int, error) {
 outer:
 	for {
 		currentData := data[read:]
+		if len(currentData) == 0 {
+			break outer
+		}
 
 		switch r.state {
 		case StateError:
@@ -80,6 +107,7 @@ outer:
 		case StateHeaders:
 			n, done, err := r.Headers.Parse(currentData)
 			if err != nil {
+				r.state = StateError
 				return 0, err
 			}
 
@@ -90,6 +118,24 @@ outer:
 			read += n
 
 			if done {
+				if r.hasBody() {
+					r.state = StateBody
+				} else {
+					r.state = StateDone
+				}
+			}
+
+		case StateBody:
+			length := getInt(r.Headers, "content-length", 0)
+			if length == 0 {
+				panic("chunked not implemented")
+			}
+
+			remaining := min(length-len(r.Body), len(currentData))
+			r.Body = append(r.Body, currentData[:remaining]...)
+			read += remaining
+
+			if len(r.Body) == length {
 				r.state = StateDone
 			}
 
