@@ -14,6 +14,18 @@ import (
 
 const port = 8080
 
+func respond200() []byte {
+	return []byte(`<html>
+<head>
+    <title>200 OK</title>
+</head>
+<body>
+    <h1>Success!</h1>
+    <p>Your request was an absolute banger.</p>
+</body>
+</html>`)
+}
+
 func respond400() []byte {
 	return []byte(`<html>
 <head>
@@ -22,6 +34,18 @@ func respond400() []byte {
 <body>
     <h1>Bad Request</h1>
     <p>Your request honestly kinda sucked.</p>
+</body>
+</html>`)
+}
+
+func respond404() []byte {
+	return []byte(`<html>
+<head>
+    <title>404 Not Found</title>
+</head>
+<body>
+    <h1>Not Found</h1>
+    <p>This page does not exist.</p>
 </body>
 </html>`)
 }
@@ -38,24 +62,18 @@ func respond500() []byte {
 </html>`)
 }
 
-func respond200() []byte {
-	return []byte(`<html>
-<head>
-    <title>200 OK</title>
-</head>
-<body>
-    <h1>Success!</h1>
-    <p>Your request was an absolute banger.</p>
-</body>
-</html>`)
-}
-
 func handler(w *response.Writer, req *request.Request) {
 	var status response.StatusCode
 	var body []byte
 	h := response.GetDefaultHeaders(0)
 
 	switch req.RequestLine.RequestTarget {
+	case "/":
+		fallthrough
+	case "/shazim":
+		status = response.StatusOK
+		body = respond200()
+
 	case "/yourproblem":
 		status = response.StatusBadRequest
 		body = respond400()
@@ -65,8 +83,8 @@ func handler(w *response.Writer, req *request.Request) {
 		body = respond500()
 
 	default:
-		status = response.StatusOK
-		body = respond200()
+		status = response.StatusNotFound
+		body = respond404()
 	}
 
 	w.WriteStatusLine(status)
