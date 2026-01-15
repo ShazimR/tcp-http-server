@@ -99,6 +99,23 @@ func (w *Writer) WriteBody(p []byte) error {
 	return nil
 }
 
+func (w *Writer) WriteResponse(statusCode StatusCode, header *headers.Headers, body []byte) error {
+	err := w.WriteStatusLine(statusCode)
+	if err != nil {
+		return err
+	}
+	err = w.WriteHeaders(header)
+	if err != nil {
+		return err
+	}
+	err = w.WriteBody(body)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func GetDefaultHeaders(contentLen int) *headers.Headers {
 	h := headers.NewHeaders()
 	h.Set("Content-Length", strconv.Itoa(contentLen))

@@ -85,15 +85,7 @@ func handler(w *response.Writer, req *request.Request) error {
 
 	h := response.GetDefaultHeaders(len(body))
 
-	err := w.WriteStatusLine(status)
-	if err != nil {
-		return err
-	}
-	err = w.WriteHeaders(h)
-	if err != nil {
-		return err
-	}
-	err = w.WriteBody(body)
+	err := w.WriteResponse(status, h, body)
 	if err != nil {
 		return err
 	}
