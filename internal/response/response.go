@@ -16,12 +16,12 @@ const (
 	StatusInternalServerError StatusCode = 500
 )
 
-type Response struct {
-}
-
 var (
 	ErrUnrecognizedStatusCode = fmt.Errorf("unrecognized status code")
 )
+
+type Response struct {
+}
 
 func GetDefaultHeaders(contentLen int) *headers.Headers {
 	h := headers.NewHeaders()

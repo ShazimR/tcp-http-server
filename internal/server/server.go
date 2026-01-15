@@ -1,54 +1,92 @@
 package server
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net"
+	"strconv"
+	"sync/atomic"
 
+	"github.com/ShazimR/tcp-http-server/internal/request"
 	"github.com/ShazimR/tcp-http-server/internal/response"
 )
 
+type HandlerError struct {
+	StatusCode response.StatusCode
+	Message    string
+}
+
+type Handler func(w io.Writer, req *request.Request) *HandlerError
+
 type Server struct {
-	closed bool
+	closed   atomic.Bool
+	listener net.Listener
+	handler  Handler
 }
 
 func (s *Server) Close() error {
-	s.closed = true
+	s.closed.Store(true)
 	return nil
 }
 
-func runConnection(_ *Server, conn io.ReadWriteCloser) {
+func (s *Server) handle(conn io.ReadWriteCloser) {
 	defer conn.Close()
 
 	headers := response.GetDefaultHeaders(0)
-	response.WriteStatusLine(conn, response.StatusOK)
+	r, err := request.RequestFromReader(conn)
+	if err != nil {
+		response.WriteStatusLine(conn, response.StatusBadRequest)
+		response.WriteHeaders(conn, headers)
+		return
+	}
+
+	writer := bytes.NewBuffer([]byte{})
+	handlerError := s.handler(writer, r)
+
+	var body []byte = nil
+	var status response.StatusCode = response.StatusOK
+	if handlerError != nil {
+		status = handlerError.StatusCode
+		body = []byte(handlerError.Message)
+	} else {
+		body = writer.Bytes()
+	}
+
+	headers.Replace("Content-Length", strconv.Itoa(len(body)))
+	response.WriteStatusLine(conn, status)
 	response.WriteHeaders(conn, headers)
+	conn.Write(body)
 }
 
-func runServer(s *Server, listener net.Listener) {
+func (s *Server) listen() {
 	for {
-		conn, err := listener.Accept()
-
-		if s.closed {
-			return
-		}
-
+		conn, err := s.listener.Accept()
 		if err != nil {
+			if s.closed.Load() {
+				return
+			}
+			log.Printf("error accepting connection %v", err)
 			continue
 		}
 
-		go runConnection(s, conn)
+		go s.handle(conn)
 	}
 }
 
-func Serve(port uint16) (*Server, error) {
+func Serve(port uint16, handler Handler) (*Server, error) {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, err
 	}
 
-	server := &Server{closed: false}
-	go runServer(server, listener)
+	server := &Server{
+		closed:   atomic.Bool{},
+		handler:  handler,
+		listener: listener,
+	}
 
+	go server.listen()
 	return server, nil
 }
