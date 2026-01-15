@@ -1,10 +1,10 @@
 package main
 
 import (
-	"io"
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 
 	"github.com/ShazimR/tcp-http-server/internal/request"
@@ -14,24 +14,66 @@ import (
 
 const port = 8080
 
-func handler(w io.Writer, req *request.Request) *server.HandlerError {
+func respond400() []byte {
+	return []byte(`<html>
+<head>
+    <title>400 Bad Request</title>
+</head>
+<body>
+    <h1>Bad Request</h1>
+    <p>Your request honestly kinda sucked.</p>
+</body>
+</html>`)
+}
+
+func respond500() []byte {
+	return []byte(`<html>
+<head>
+    <title>500 Internal Server Error</title>
+</head>
+<body>
+    <h1>Internal Server Error</h1>
+    <p>Okay, you know what? This one is on me.</p>
+</body>
+</html>`)
+}
+
+func respond200() []byte {
+	return []byte(`<html>
+<head>
+    <title>200 OK</title>
+</head>
+<body>
+    <h1>Success!</h1>
+    <p>Your request was an absolute banger.</p>
+</body>
+</html>`)
+}
+
+func handler(w *response.Writer, req *request.Request) {
+	var status response.StatusCode
+	var body []byte
+	h := response.GetDefaultHeaders(0)
+
 	switch req.RequestLine.RequestTarget {
 	case "/yourproblem":
-		return &server.HandlerError{
-			StatusCode: response.StatusBadRequest,
-			Message:    "Your problem is not my problem\n",
-		}
+		status = response.StatusBadRequest
+		body = respond400()
 
 	case "/myproblem":
-		return &server.HandlerError{
-			StatusCode: response.StatusInternalServerError,
-			Message:    "Woopsie, my bad\n",
-		}
+		status = response.StatusInternalServerError
+		body = respond500()
 
 	default:
-		w.Write([]byte("All good, frfr\n"))
-		return nil
+		status = response.StatusOK
+		body = respond200()
 	}
+
+	w.WriteStatusLine(status)
+	h.Replace("Content-Length", strconv.Itoa(len(body)))
+	h.Replace("Content-Type", "text/html")
+	w.WriteHeaders(h)
+	w.WriteBody(body)
 }
 
 func main() {

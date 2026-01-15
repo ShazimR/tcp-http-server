@@ -20,19 +20,15 @@ var (
 	ErrUnrecognizedStatusCode = fmt.Errorf("unrecognized status code")
 )
 
-type Response struct {
+type Writer struct {
+	writer io.Writer
 }
 
-func GetDefaultHeaders(contentLen int) *headers.Headers {
-	h := headers.NewHeaders()
-	h.Set("Content-Length", strconv.Itoa(contentLen))
-	h.Set("Connection", "close")
-	h.Set("Content-Type", "text/plain")
-
-	return h
+func NewWriter(w io.Writer) *Writer {
+	return &Writer{writer: w}
 }
 
-func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
+func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 	statusLine := []byte{}
 	switch statusCode {
 	case StatusOK:
@@ -45,11 +41,11 @@ func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
 		return ErrUnrecognizedStatusCode
 	}
 
-	_, err := w.Write(statusLine)
+	_, err := w.writer.Write(statusLine)
 	return err
 }
 
-func WriteHeaders(w io.Writer, h *headers.Headers) error {
+func (w *Writer) WriteHeaders(h *headers.Headers) error {
 	b := []byte{}
 
 	h.ForEach(func(name, value string) {
@@ -57,6 +53,20 @@ func WriteHeaders(w io.Writer, h *headers.Headers) error {
 	})
 	b = fmt.Appendf(b, "\r\n")
 
-	_, err := w.Write(b)
+	_, err := w.writer.Write(b)
 	return err
+}
+
+func (w *Writer) WriteBody(p []byte) (int, error) {
+	n, err := w.writer.Write(p)
+	return n, err
+}
+
+func GetDefaultHeaders(contentLen int) *headers.Headers {
+	h := headers.NewHeaders()
+	h.Set("Content-Length", strconv.Itoa(contentLen))
+	h.Set("Connection", "close")
+	h.Set("Content-Type", "text/plain")
+
+	return h
 }

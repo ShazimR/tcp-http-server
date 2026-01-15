@@ -1,24 +1,17 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"log"
 	"net"
-	"strconv"
 	"sync/atomic"
 
 	"github.com/ShazimR/tcp-http-server/internal/request"
 	"github.com/ShazimR/tcp-http-server/internal/response"
 )
 
-type HandlerError struct {
-	StatusCode response.StatusCode
-	Message    string
-}
-
-type Handler func(w io.Writer, req *request.Request) *HandlerError
+type Handler func(w *response.Writer, req *request.Request)
 
 type Server struct {
 	closed   atomic.Bool
@@ -34,30 +27,16 @@ func (s *Server) Close() error {
 func (s *Server) handle(conn io.ReadWriteCloser) {
 	defer conn.Close()
 
-	headers := response.GetDefaultHeaders(0)
+	responseWriter := response.NewWriter(conn)
 	r, err := request.RequestFromReader(conn)
 	if err != nil {
-		response.WriteStatusLine(conn, response.StatusBadRequest)
-		response.WriteHeaders(conn, headers)
+		responseWriter.WriteStatusLine(response.StatusBadRequest)
+		responseWriter.WriteHeaders(response.GetDefaultHeaders(0))
+		responseWriter.WriteBody([]byte(err.Error()))
 		return
 	}
 
-	writer := bytes.NewBuffer([]byte{})
-	handlerError := s.handler(writer, r)
-
-	var body []byte = nil
-	var status response.StatusCode = response.StatusOK
-	if handlerError != nil {
-		status = handlerError.StatusCode
-		body = []byte(handlerError.Message)
-	} else {
-		body = writer.Bytes()
-	}
-
-	headers.Replace("Content-Length", strconv.Itoa(len(body)))
-	response.WriteStatusLine(conn, status)
-	response.WriteHeaders(conn, headers)
-	conn.Write(body)
+	s.handler(responseWriter, r)
 }
 
 func (s *Server) listen() {
