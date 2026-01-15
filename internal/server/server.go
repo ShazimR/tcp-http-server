@@ -11,7 +11,7 @@ import (
 	"github.com/ShazimR/tcp-http-server/internal/response"
 )
 
-type Handler func(w *response.Writer, req *request.Request)
+type Handler func(w *response.Writer, req *request.Request) error
 
 type Server struct {
 	closed   atomic.Bool
@@ -32,13 +32,27 @@ func (s *Server) handle(conn io.ReadWriteCloser) {
 	if err != nil {
 		body := []byte(err.Error())
 		h := response.GetDefaultHeaders(len(body))
-		responseWriter.WriteStatusLine(response.StatusBadRequest)
-		responseWriter.WriteHeaders(h)
-		responseWriter.WriteBody(body)
+		err := responseWriter.WriteStatusLine(response.StatusBadRequest)
+		if err != nil {
+			return
+		}
+		err = responseWriter.WriteHeaders(h)
+		if err != nil {
+			return
+		}
+		err = responseWriter.WriteBody(body)
+		if err != nil {
+			return
+		}
+
 		return
 	}
 
-	s.handler(responseWriter, r)
+	err = s.handler(responseWriter, r)
+	if err != nil {
+		log.Printf("error from handler: %v\n", err)
+		return
+	}
 }
 
 func (s *Server) listen() {

@@ -61,14 +61,12 @@ func respond500() []byte {
 </html>`)
 }
 
-func handler(w *response.Writer, req *request.Request) {
+func handler(w *response.Writer, req *request.Request) error {
 	var status response.StatusCode
 	var body []byte
 
 	switch req.RequestLine.RequestTarget {
-	case "/":
-		fallthrough
-	case "/shazim":
+	case "/", "/shazim":
 		status = response.StatusOK
 		body = respond200()
 
@@ -86,11 +84,21 @@ func handler(w *response.Writer, req *request.Request) {
 	}
 
 	h := response.GetDefaultHeaders(len(body))
-	h.Replace("Content-Type", "text/html")
 
-	w.WriteStatusLine(status)
-	w.WriteHeaders(h)
-	w.WriteBody(body)
+	err := w.WriteStatusLine(status)
+	if err != nil {
+		return err
+	}
+	err = w.WriteHeaders(h)
+	if err != nil {
+		return err
+	}
+	err = w.WriteBody(body)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func main() {

@@ -19,6 +19,7 @@ const (
 
 var (
 	ErrUnrecognizedStatusCode = fmt.Errorf("unrecognized status code")
+	ErrFailedToWrite          = fmt.Errorf("failed to write")
 )
 
 type Writer struct {
@@ -44,8 +45,19 @@ func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 		return ErrUnrecognizedStatusCode
 	}
 
-	_, err := w.writer.Write(statusLine)
-	return err
+	writeN := 0
+	for writeN < len(statusLine) {
+		n, err := w.writer.Write(statusLine[writeN:])
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrFailedToWrite, err)
+		}
+		if n == 0 {
+			return ErrFailedToWrite
+		}
+		writeN += n
+	}
+
+	return nil
 }
 
 func (w *Writer) WriteHeaders(h *headers.Headers) error {
@@ -56,20 +68,42 @@ func (w *Writer) WriteHeaders(h *headers.Headers) error {
 	})
 	b = fmt.Appendf(b, "\r\n")
 
-	_, err := w.writer.Write(b)
-	return err
+	writeN := 0
+	for writeN < len(b) {
+		n, err := w.writer.Write(b[writeN:])
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrFailedToWrite, err)
+		}
+		if n == 0 {
+			return ErrFailedToWrite
+		}
+		writeN += n
+	}
+
+	return nil
 }
 
-func (w *Writer) WriteBody(p []byte) (int, error) {
-	n, err := w.writer.Write(p)
-	return n, err
+func (w *Writer) WriteBody(p []byte) error {
+	writeN := 0
+	for writeN < len(p) {
+		n, err := w.writer.Write(p[writeN:])
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrFailedToWrite, err)
+		}
+		if n == 0 {
+			return ErrFailedToWrite
+		}
+		writeN += n
+	}
+
+	return nil
 }
 
 func GetDefaultHeaders(contentLen int) *headers.Headers {
 	h := headers.NewHeaders()
 	h.Set("Content-Length", strconv.Itoa(contentLen))
 	h.Set("Connection", "close")
-	h.Set("Content-Type", "text/plain")
+	h.Set("Content-Type", "text/html")
 
 	return h
 }
