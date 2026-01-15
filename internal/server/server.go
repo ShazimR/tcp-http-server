@@ -21,7 +21,7 @@ type Server struct {
 
 func (s *Server) Close() error {
 	s.closed.Store(true)
-	return nil
+	return s.listener.Close()
 }
 
 func (s *Server) handle(conn io.ReadWriteCloser) {

@@ -52,7 +52,7 @@ func (w *Writer) WriteHeaders(h *headers.Headers) error {
 	b := []byte{}
 
 	h.ForEach(func(name, value string) {
-		b = fmt.Appendf(b, "%s: %s\n", name, value)
+		b = fmt.Appendf(b, "%s: %s\r\n", name, value)
 	})
 	b = fmt.Appendf(b, "\r\n")
 
