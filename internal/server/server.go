@@ -30,9 +30,11 @@ func (s *Server) handle(conn io.ReadWriteCloser) {
 	responseWriter := response.NewWriter(conn)
 	r, err := request.RequestFromReader(conn)
 	if err != nil {
+		body := []byte(err.Error())
+		h := response.GetDefaultHeaders(len(body))
 		responseWriter.WriteStatusLine(response.StatusBadRequest)
-		responseWriter.WriteHeaders(response.GetDefaultHeaders(0))
-		responseWriter.WriteBody([]byte(err.Error()))
+		responseWriter.WriteHeaders(h)
+		responseWriter.WriteBody(body)
 		return
 	}
 

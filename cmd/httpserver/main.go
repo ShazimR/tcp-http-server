@@ -4,7 +4,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 
 	"github.com/ShazimR/tcp-http-server/internal/request"
@@ -65,7 +64,6 @@ func respond500() []byte {
 func handler(w *response.Writer, req *request.Request) {
 	var status response.StatusCode
 	var body []byte
-	h := response.GetDefaultHeaders(0)
 
 	switch req.RequestLine.RequestTarget {
 	case "/":
@@ -87,9 +85,10 @@ func handler(w *response.Writer, req *request.Request) {
 		body = respond404()
 	}
 
-	w.WriteStatusLine(status)
-	h.Replace("Content-Length", strconv.Itoa(len(body)))
+	h := response.GetDefaultHeaders(len(body))
 	h.Replace("Content-Type", "text/html")
+
+	w.WriteStatusLine(status)
 	w.WriteHeaders(h)
 	w.WriteBody(body)
 }
@@ -100,7 +99,7 @@ func main() {
 		log.Fatalf("error starting server: %v", err)
 	}
 	defer s.Close()
-	log.Println("Server started on port: ", port)
+	log.Printf("Server started on port: %d", port)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
