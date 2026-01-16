@@ -32,16 +32,7 @@ func (s *Server) handle(conn io.ReadWriteCloser) {
 	if err != nil {
 		body := []byte(err.Error())
 		h := response.GetDefaultHeaders(len(body))
-		err := responseWriter.WriteStatusLine(response.StatusBadRequest)
-		if err != nil {
-			return
-		}
-		err = responseWriter.WriteHeaders(h)
-		if err != nil {
-			return
-		}
-		err = responseWriter.WriteBody(body)
-		if err != nil {
+		if err := responseWriter.WriteResponse(response.StatusBadRequest, h, body); err != nil {
 			return
 		}
 

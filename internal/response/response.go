@@ -100,16 +100,13 @@ func (w *Writer) WriteBody(p []byte) error {
 }
 
 func (w *Writer) WriteResponse(statusCode StatusCode, header *headers.Headers, body []byte) error {
-	err := w.WriteStatusLine(statusCode)
-	if err != nil {
+	if err := w.WriteStatusLine(statusCode); err != nil {
 		return err
 	}
-	err = w.WriteHeaders(header)
-	if err != nil {
+	if err := w.WriteHeaders(header); err != nil {
 		return err
 	}
-	err = w.WriteBody(body)
-	if err != nil {
+	if err := w.WriteBody(body); err != nil {
 		return err
 	}
 

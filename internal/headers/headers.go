@@ -84,6 +84,11 @@ func (h *Headers) Set(name string, value string) {
 	}
 }
 
+func (h *Headers) Delete(name string) {
+	name = strings.ToLower(name)
+	delete(h.headers, name)
+}
+
 func (h *Headers) ForEach(cb func(name, value string)) {
 	for n, v := range h.headers {
 		cb(n, v)
