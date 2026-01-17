@@ -49,10 +49,10 @@ func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 	for writeN < len(statusLine) {
 		n, err := w.writer.Write(statusLine[writeN:])
 		if err != nil {
-			return fmt.Errorf("%w: %v", ErrFailedToWrite, err)
+			return fmt.Errorf("%w: %w", ErrFailedToWrite, err)
 		}
 		if n == 0 {
-			return ErrFailedToWrite
+			return fmt.Errorf("%w", ErrFailedToWrite)
 		}
 		writeN += n
 	}
@@ -72,10 +72,10 @@ func (w *Writer) WriteHeaders(h *headers.Headers) error {
 	for writeN < len(b) {
 		n, err := w.writer.Write(b[writeN:])
 		if err != nil {
-			return fmt.Errorf("%w: %v", ErrFailedToWrite, err)
+			return fmt.Errorf("%w: %w", ErrFailedToWrite, err)
 		}
 		if n == 0 {
-			return ErrFailedToWrite
+			return fmt.Errorf("%w", ErrFailedToWrite)
 		}
 		writeN += n
 	}
@@ -88,10 +88,10 @@ func (w *Writer) WriteBody(p []byte) error {
 	for writeN < len(p) {
 		n, err := w.writer.Write(p[writeN:])
 		if err != nil {
-			return fmt.Errorf("%w: %v", ErrFailedToWrite, err)
+			return fmt.Errorf("%w: %w", ErrFailedToWrite, err)
 		}
 		if n == 0 {
-			return ErrFailedToWrite
+			return fmt.Errorf("%w", ErrFailedToWrite)
 		}
 		writeN += n
 	}
