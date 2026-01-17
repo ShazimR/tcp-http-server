@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/ShazimR/tcp-http-server/internal/headers"
 	"github.com/ShazimR/tcp-http-server/internal/request"
 	"github.com/ShazimR/tcp-http-server/internal/response"
 	"github.com/ShazimR/tcp-http-server/internal/server"
@@ -111,15 +114,21 @@ func handler(w *response.Writer, req *request.Request) error {
 			h.Delete("Content-Length")
 			h.Set("Transfer-Encoding", "chunked")
 			h.Replace("Content-Type", "text/html")
+			h.Set("Trailer", "X-Content-SHA256")
+			h.Set("Trailer", "X-Content-Length")
+
 			if err = w.WriteHeaders(h); err != nil {
 				return err
 			}
 
+			fullBody := []byte{}
 			data := make([]byte, 32)
 			for {
 				n, rErr := f.Read(data)
 				if n > 0 {
-					if err = w.WriteBody([]byte(fmt.Sprintf("%x\r\n", n))); err != nil {
+					fullBody = append(fullBody, data[:n]...)
+
+					if err = w.WriteBody(fmt.Appendf(nil, "%x\r\n", n)); err != nil {
 						return err
 					}
 					if err = w.WriteBody(data[:n]); err != nil {
@@ -137,10 +146,16 @@ func handler(w *response.Writer, req *request.Request) error {
 					return rErr
 				}
 			}
-			if err = w.WriteBody([]byte("0\r\n\r\n")); err != nil {
+			if err = w.WriteBody([]byte("0\r\n")); err != nil {
 				return err
 			}
-
+			trailer := headers.NewHeaders()
+			sum := sha256.Sum256(fullBody)
+			trailer.Set("X-Content-SHA256", hex.EncodeToString(sum[:]))
+			trailer.Set("X-Content-Length", fmt.Sprintf("%d", len(fullBody)))
+			if err = w.WriteHeaders(trailer); err != nil {
+				return err
+			}
 		}
 
 	} else {
