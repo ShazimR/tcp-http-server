@@ -25,6 +25,7 @@ func respond200() []byte {
 	return []byte(`<html>
 <head>
     <title>200 OK</title>
+	<link rel="icon" href="/favicon.ico">
 </head>
 <body>
     <h1>Success!</h1>
@@ -37,6 +38,7 @@ func respond400() []byte {
 	return []byte(`<html>
 <head>
     <title>400 Bad Request</title>
+	<link rel="icon" href="/favicon.ico">
 </head>
 <body>
     <h1>Bad Request</h1>
@@ -49,6 +51,7 @@ func respond404() []byte {
 	return []byte(`<html>
 <head>
     <title>404 Not Found</title>
+	<link rel="icon" href="/favicon.ico">
 </head>
 <body>
     <h1>Not Found</h1>
@@ -61,6 +64,7 @@ func respond500() []byte {
 	return []byte(`<html>
 <head>
     <title>500 Internal Server Error</title>
+	<link rel="icon" href="/favicon.ico">
 </head>
 <body>
     <h1>Internal Server Error</h1>
@@ -81,6 +85,17 @@ func handler(w *response.Writer, req *request.Request) error {
 		status = response.StatusOK
 		body = respond200()
 
+	} else if req.RequestLine.RequestTarget == "/favicon.ico" {
+		data, err := os.ReadFile("./static/favicon.ico")
+		if err != nil {
+			status = response.StatusNotFound
+			body = respond404()
+		} else {
+			h.Replace("Content-Type", "image/x-icon")
+			status = response.StatusOK
+			body = data
+		}
+
 	} else if req.RequestLine.RequestTarget == "/yourproblem" {
 		status = response.StatusBadRequest
 		body = respond400()
@@ -88,6 +103,17 @@ func handler(w *response.Writer, req *request.Request) error {
 	} else if req.RequestLine.RequestTarget == "/myproblem" {
 		status = response.StatusInternalServerError
 		body = respond500()
+
+	} else if req.RequestLine.RequestTarget == "/video" {
+		data, err := os.ReadFile("./static/one-last-breath.mp4")
+		if err != nil {
+			status = response.StatusNotFound
+			body = respond404()
+		} else {
+			h.Replace("Content-Type", "video/mp4")
+			status = response.StatusOK
+			body = data
+		}
 
 	} else if strings.HasPrefix(req.RequestLine.RequestTarget, "/static/") {
 		target := req.RequestLine.RequestTarget[len("/static/"):]
@@ -113,7 +139,18 @@ func handler(w *response.Writer, req *request.Request) error {
 			}
 			h.Delete("Content-Length")
 			h.Set("Transfer-Encoding", "chunked")
-			h.Replace("Content-Type", "text/html")
+
+			targetParts := strings.Split(target, ".")
+			fileExt := "text/plain"
+			if len(targetParts) == 2 {
+				if ext := targetParts[1]; ext == "html" {
+					fileExt = "text/html"
+				} else if ext == "mp4" {
+					fileExt = "video/mp4"
+				}
+			}
+
+			h.Replace("Content-Type", fileExt)
 			h.Set("Trailer", "X-Content-SHA256")
 			h.Set("Trailer", "X-Content-Length")
 

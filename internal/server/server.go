@@ -1,11 +1,13 @@
 package server
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"sync/atomic"
+	"syscall"
 
 	"github.com/ShazimR/tcp-http-server/internal/request"
 	"github.com/ShazimR/tcp-http-server/internal/response"
@@ -40,6 +42,11 @@ func (s *Server) handle(conn io.ReadWriteCloser) {
 	}
 
 	err = s.handler(responseWriter, r)
+	if errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, net.ErrClosed) {
+		return
+	}
 	if err != nil {
 		log.Printf("error from handler: %v\n", err)
 		return
