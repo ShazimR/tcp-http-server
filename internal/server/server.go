@@ -11,14 +11,14 @@ import (
 
 	"github.com/ShazimR/tcp-http-server/internal/request"
 	"github.com/ShazimR/tcp-http-server/internal/response"
+	"github.com/ShazimR/tcp-http-server/internal/router"
 )
-
-type Handler func(w *response.Writer, req *request.Request) error
 
 type Server struct {
 	closed   atomic.Bool
 	listener net.Listener
-	handler  Handler
+	handler  response.Handler
+	router   *router.Router
 }
 
 func (s *Server) Close() error {
@@ -41,7 +41,17 @@ func (s *Server) handle(conn io.ReadWriteCloser) {
 		return
 	}
 
-	err = s.handler(responseWriter, r)
+	var handler response.Handler
+	if s.handler != nil {
+		handler = s.handler
+	} else if s.router != nil {
+		handler = s.router.GetHandler(r)
+	} else {
+		log.Printf("handler function does not exist")
+		return
+	}
+
+	err = handler(responseWriter, r)
 	if errors.Is(err, syscall.EPIPE) ||
 		errors.Is(err, syscall.ECONNRESET) ||
 		errors.Is(err, net.ErrClosed) {
@@ -68,7 +78,7 @@ func (s *Server) listen() {
 	}
 }
 
-func Serve(port uint16, handler Handler) (*Server, error) {
+func Serve(port uint16, handler response.Handler, router *router.Router) (*Server, error) {
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, err
@@ -77,6 +87,7 @@ func Serve(port uint16, handler Handler) (*Server, error) {
 	server := &Server{
 		closed:   atomic.Bool{},
 		handler:  handler,
+		router:   router,
 		listener: listener,
 	}
 

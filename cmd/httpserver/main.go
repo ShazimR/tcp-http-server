@@ -205,7 +205,7 @@ func handler(w *response.Writer, req *request.Request) error {
 }
 
 func main() {
-	s, err := server.Serve(port, handler)
+	s, err := server.Serve(port, handler, nil)
 	if err != nil {
 		log.Fatalf("error starting server: %v", err)
 	}
