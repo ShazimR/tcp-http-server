@@ -165,13 +165,7 @@ func handler(w *response.Writer, req *request.Request) error {
 				if n > 0 {
 					fullBody = append(fullBody, data[:n]...)
 
-					if err = w.WriteBody(fmt.Appendf(nil, "%x\r\n", n)); err != nil {
-						return err
-					}
-					if err = w.WriteBody(data[:n]); err != nil {
-						return err
-					}
-					if err = w.WriteBody([]byte("\r\n")); err != nil {
+					if err = w.WriteChunk(data[:n]); err != nil {
 						return err
 					}
 				}
@@ -183,7 +177,7 @@ func handler(w *response.Writer, req *request.Request) error {
 					return rErr
 				}
 			}
-			if err = w.WriteBody([]byte("0\r\n")); err != nil {
+			if err = w.WriteChunkEnd(true); err != nil {
 				return err
 			}
 			trailer := headers.NewHeaders()

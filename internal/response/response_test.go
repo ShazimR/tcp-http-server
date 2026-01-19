@@ -133,6 +133,65 @@ func TestWriteBody(t *testing.T) {
 	assert.True(t, errors.Is(err, ErrFailedToWrite))
 }
 
+func TestWriteChunk(t *testing.T) {
+	// Test: Writes chunk framing and data (supports partial writes)
+	cw := &chunkWriter{maxPerWrite: 2}
+	w := NewWriter(cw)
+
+	payload := []byte("hello") // len=5 -> "5\r\nhello\r\n"
+	err := w.WriteChunk(payload)
+	require.NoError(t, err)
+	assert.Equal(t, "5\r\nhello\r\n", cw.String())
+
+	// Test: Underlying writer error
+	ew := &errWriter{failAfter: 0} // fail on first write
+	w = NewWriter(ew)
+	err = w.WriteChunk([]byte("x"))
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrFailedToWrite))
+
+	// Test: Zero-byte writes are treated as failure
+	zw := &zeroWriter{}
+	w = NewWriter(zw)
+	err = w.WriteChunk([]byte("x"))
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrFailedToWrite))
+}
+
+func TestWriteChunkEnd(t *testing.T) {
+	// Test: hasTrailers=true writes only "0\r\n"
+	cw := &chunkWriter{maxPerWrite: 1}
+	w := NewWriter(cw)
+
+	err := w.WriteChunkEnd(true)
+	require.NoError(t, err)
+	assert.Equal(t, "0\r\n", cw.String())
+
+	// Test: hasTrailers=false writes final CRLF "0\r\n\r\n"
+	cw = &chunkWriter{maxPerWrite: 1}
+	w = NewWriter(cw)
+
+	err = w.WriteChunkEnd(false)
+	require.NoError(t, err)
+	assert.Equal(t, "0\r\n\r\n", cw.String())
+
+	// Test: underlying writer error
+	ew := &errWriter{failAfter: 0} // fail on first write
+	w = NewWriter(ew)
+
+	err = w.WriteChunkEnd(true)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrFailedToWrite))
+
+	// Test: zero-byte writes are treated as failure
+	zw := &zeroWriter{}
+	w = NewWriter(zw)
+
+	err = w.WriteChunkEnd(false)
+	require.Error(t, err)
+	assert.True(t, errors.Is(err, ErrFailedToWrite))
+}
+
 func TestWriteResponse(t *testing.T) {
 	// Test: Writes status line + headers + body in correct order (supports partial writes)
 	cw := &chunkWriter{maxPerWrite: 3}
