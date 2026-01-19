@@ -99,6 +99,34 @@ func (w *Writer) WriteBody(p []byte) error {
 	return nil
 }
 
+func (w *Writer) WriteChunk(p []byte) error {
+	if err := w.WriteBody(fmt.Appendf(nil, "%x\r\n", len(p))); err != nil {
+		return err
+	}
+	if err := w.WriteBody(p); err != nil {
+		return err
+	}
+	if err := w.WriteBody([]byte("\r\n")); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (w *Writer) WriteChunkEnd(hasTrailers bool) error {
+	b := []byte{}
+	if hasTrailers {
+		b = []byte("0\r\n")
+	} else {
+		b = []byte("0\r\n\r\n")
+	}
+
+	if err := w.WriteBody(b); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (w *Writer) WriteResponse(statusCode StatusCode, header *headers.Headers, body []byte) error {
 	if err := w.WriteStatusLine(statusCode); err != nil {
 		return err
