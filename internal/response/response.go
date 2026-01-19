@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/ShazimR/tcp-http-server/internal/headers"
+	"github.com/ShazimR/tcp-http-server/internal/request"
 )
 
 type StatusCode int
@@ -14,6 +15,7 @@ const (
 	StatusOK                  StatusCode = 200
 	StatusBadRequest          StatusCode = 400
 	StatusNotFound            StatusCode = 404
+	StatusMethodNotAllowed    StatusCode = 405
 	StatusInternalServerError StatusCode = 500
 )
 
@@ -21,6 +23,8 @@ var (
 	ErrUnrecognizedStatusCode = fmt.Errorf("unrecognized status code")
 	ErrFailedToWrite          = fmt.Errorf("failed to write")
 )
+
+type Handler func(w *Writer, req *request.Request) error
 
 type Writer struct {
 	writer io.Writer
@@ -39,6 +43,8 @@ func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 		statusLine = []byte("HTTP/1.1 400 Bad Request\r\n")
 	case StatusNotFound:
 		statusLine = []byte("HTTP/1.1 404 Not Found\r\n")
+	case StatusMethodNotAllowed:
+		statusLine = []byte("HTTP/1.1 405 Method Not Allowed\r\n")
 	case StatusInternalServerError:
 		statusLine = []byte("HTTP/1.1 500 Internal Server Error\r\n")
 	default:
