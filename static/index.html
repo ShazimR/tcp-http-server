@@ -1,12 +1,55 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Home</title>
-</head>
-<body>
-    <h1>Home Page</h1>
-    <p>This is the home page.</p>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Router Tester</title>
+
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+
+  <body>
+    <header class="container">
+      <h1>Router Tester</h1>
+      <p class="muted">
+        Tests exact-path routing for GET / POST / PUT / DELETE / PATCH.
+      </p>
+    </header>
+
+    <main class="container grid">
+      <section class="card">
+        <h2>Request</h2>
+
+        <label class="label">Path</label>
+        <input id="path" class="input" value="/api/echo" />
+
+        <div class="row wrap">
+          <button class="btn" data-method="GET">GET</button>
+          <button class="btn" data-method="POST">POST</button>
+          <button class="btn" data-method="PUT">PUT</button>
+          <button class="btn" data-method="DELETE">DELETE</button>
+          <button class="btn" data-method="PATCH">PATCH</button>
+        </div>
+
+        <label class="label">Body (JSON or text)</label>
+        <textarea id="body" class="textarea"></textarea>
+      </section>
+
+      <section class="card">
+        <h2>Response</h2>
+
+        <div class="row wrap">
+          <button id="rootCheck" class="btn secondary">GET /</button>
+          <button id="indexCheck" class="btn secondary">GET /index.html</button>
+          <button id="cssCheck" class="btn secondary">GET /styles.css</button>
+          <button id="jsCheck" class="btn secondary">GET /app.js</button>
+        </div>
+
+        <pre id="output" class="output"></pre>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
 </html>
