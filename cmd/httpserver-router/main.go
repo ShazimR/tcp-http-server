@@ -107,6 +107,52 @@ func echo(w *response.Writer, req *request.Request) error {
 	return err
 }
 
+func echoParams(w *response.Writer, req *request.Request) error {
+	status := response.StatusOK
+	h := response.GetDefaultHeaders(0)
+	h.Replace("Content-Type", "application/json")
+
+	var reqBody TestResponse
+	reqBodyStr := ""
+	method := req.RequestLine.Method
+	path := req.RequestLine.RequestTarget
+	err := json.Unmarshal(req.Body, &reqBody)
+	if err != nil {
+		reqBodyStr = "failed to parse body or body was empty"
+	} else {
+		reqBodyStr = fmt.Sprintf("msg: %s | ts: %d", reqBody.Message, reqBody.Timestamp)
+	}
+
+	params := ""
+	for k, v := range req.Params {
+		params += fmt.Sprintf("%s=%s | ", k, v)
+	}
+
+	fmt.Printf("Method:  %s\n", method)
+	fmt.Printf("Path:    %s\n", path)
+	fmt.Printf("Params:  %s\n", params)
+	fmt.Printf("Body:    %s\n", reqBodyStr)
+	fmt.Printf("RawBody: %s\n\n", req.Body)
+
+	body := map[string]string{
+		"Method": method,
+		"Path":   path,
+		"Params": params,
+		"Body":   reqBodyStr,
+	}
+
+	resBody, err := json.Marshal(body)
+	if err != nil {
+		status = response.StatusInternalServerError
+		resBody = []byte("failed to jsonify output")
+		h.Replace("Content-Type", "text/plain")
+	}
+
+	h.Replace("Content-Length", strconv.Itoa(len(resBody)))
+	err = w.WriteResponse(status, h, resBody)
+	return err
+}
+
 func main() {
 	// Set route handlers
 	r := router.NewRouter()
@@ -121,6 +167,18 @@ func main() {
 	r.PUT("/api/echo", echo)
 	r.DELETE("/api/echo", echo)
 	r.PATCH("/api/echo", echo)
+
+	r.GET("/api/echo?&id", echoParams)
+	r.POST("/api/echo?&id", echoParams)
+	r.PUT("/api/echo?&id", echoParams)
+	r.DELETE("/api/echo?&id", echoParams)
+
+	r.GET("/api/echo?&id&flag", echoParams)
+	r.POST("/api/echo?&id&flag", echoParams)
+	r.DELETE("/api/echo?&id&flag", echoParams)
+
+	r.GET("/api/echo?&id&flag&test", echoParams)
+	r.POST("/api/echo?&id&flag&test", echoParams)
 
 	// Setup and run server
 	s, err := server.Serve(port, nil, r)
