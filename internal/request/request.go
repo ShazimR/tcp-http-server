@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 
 	"github.com/ShazimR/tcp-http-server/internal/headers"
 )
@@ -24,6 +25,7 @@ type Request struct {
 	RequestLine RequestLine
 	Headers     *headers.Headers
 	Body        []byte
+	Params      map[string]string
 	state       parserState
 }
 
@@ -62,6 +64,7 @@ func newRequest() *Request {
 		state:   StateInit,
 		Headers: headers.NewHeaders(),
 		Body:    []byte{},
+		Params:  make(map[string]string),
 	}
 }
 
@@ -181,6 +184,29 @@ func parseRequestLine(b []byte) (*RequestLine, int, error) {
 	return requestLine, read, nil
 }
 
+func parseQueryParameters(r *Request) error {
+	target := r.RequestLine.RequestTarget
+
+	if i := strings.IndexByte(target, '?'); i != -1 && i < len(target)-1 {
+		queryStr := target[i+1:]
+		queries := strings.Split(queryStr, "&")
+
+		for _, query := range queries {
+			if k, v, hasEq := strings.Cut(query, "="); hasEq {
+				r.Params[k] = v
+
+			} else if k != "" {
+				r.Params[k] = ""
+
+			} else {
+				return ErrMalformedRequestLine
+			}
+		}
+	}
+
+	return nil
+}
+
 func RequestFromReader(reader io.Reader) (*Request, error) {
 	request := newRequest()
 
@@ -202,6 +228,10 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 
 		copy(buf, buf[readN:bufLen])
 		bufLen -= readN
+	}
+
+	if err := parseQueryParameters(request); err != nil {
+		return nil, err
 	}
 
 	return request, nil

@@ -109,35 +109,132 @@ func TestRouterGetHandlerExactMatch(t *testing.T) {
 	}
 }
 
-func TestRouterQueryStringStripping(t *testing.T) {
+func TestRouterGetHandlerQueryParam(t *testing.T) {
 	r := NewRouter()
 
-	h := func(w *response.Writer, req *request.Request) error {
-		body := []byte("search-hit")
+	hNoParams := func(w *response.Writer, req *request.Request) error {
+		body := []byte("no params")
 		h := response.GetDefaultHeaders(len(body))
 		return w.WriteResponse(response.StatusOK, h, body)
 	}
-	r.GET("/search", h)
+	hParams := func(w *response.Writer, req *request.Request) error {
+		body := []byte("a and b")
+		h := response.GetDefaultHeaders(len(body))
+		return w.WriteResponse(response.StatusOK, h, body)
+	}
 
-	// Test: query string is ignored during lookup
-	got := r.GetHandler(&request.Request{
-		RequestLine: request.RequestLine{
-			Method:        "GET",
-			RequestTarget: "/search?q=abc&sort=desc",
-		},
-	})
-	require.NotNil(t, got)
+	r.GET("/", hNoParams)
+	r.GET("/?&a&b", hParams)
 
-	var buf bytes.Buffer
-	w := response.NewWriter(&buf)
-	err := got(w, &request.Request{
-		RequestLine: request.RequestLine{
-			Method:        "GET",
-			RequestTarget: "/search?q=abc&sort=desc",
-		},
-	})
-	require.NoError(t, err)
-	assert.Contains(t, buf.String(), "\r\n\r\nsearch-hit")
+	// Test: GET /
+	{
+		got := r.GetHandler(&request.Request{
+			RequestLine: request.RequestLine{
+				Method:        "GET",
+				RequestTarget: "/",
+			},
+		})
+		require.NotNil(t, got)
+
+		var buf bytes.Buffer
+		w := response.NewWriter(&buf)
+		err := got(w, &request.Request{
+			RequestLine: request.RequestLine{
+				Method:        "GET",
+				RequestTarget: "/",
+			},
+		})
+		require.NoError(t, err)
+		assert.Contains(t, buf.String(), "\r\n\r\nno params")
+	}
+
+	// Test: GET /?a=true&b=false
+	{
+		got := r.GetHandler(&request.Request{
+			RequestLine: request.RequestLine{
+				Method:        "GET",
+				RequestTarget: "/?a=true&b=false",
+			},
+		})
+		require.NotNil(t, got)
+
+		var buf bytes.Buffer
+		w := response.NewWriter(&buf)
+		err := got(w, &request.Request{
+			RequestLine: request.RequestLine{
+				Method:        "GET",
+				RequestTarget: "/?a=true&b=false",
+			},
+		})
+		require.NoError(t, err)
+		assert.Contains(t, buf.String(), "\r\n\r\na and b")
+	}
+
+	// Test: GET /?b=false&a=true
+	{
+		got := r.GetHandler(&request.Request{
+			RequestLine: request.RequestLine{
+				Method:        "GET",
+				RequestTarget: "/?b=false&a=true",
+			},
+		})
+		require.NotNil(t, got)
+
+		var buf bytes.Buffer
+		w := response.NewWriter(&buf)
+		err := got(w, &request.Request{
+			RequestLine: request.RequestLine{
+				Method:        "GET",
+				RequestTarget: "/?b=false&a=true",
+			},
+		})
+		require.NoError(t, err)
+		assert.Contains(t, buf.String(), "\r\n\r\na and b")
+	}
+
+	// Test: GET /?a=true
+	{
+		got := r.GetHandler(&request.Request{
+			RequestLine: request.RequestLine{
+				Method:        "GET",
+				RequestTarget: "/?a=true",
+			},
+		})
+		require.NotNil(t, got)
+
+		var buf bytes.Buffer
+		w := response.NewWriter(&buf)
+		err := got(w, &request.Request{
+			RequestLine: request.RequestLine{
+				Method:        "GET",
+				RequestTarget: "/?a=true",
+			},
+		})
+		require.NoError(t, err)
+		assert.Contains(t, buf.String(), "HTTP/1.1 404 Not Found\r\n")
+	}
+
+	// Test: POST /?a=true&b=false
+	{
+		got := r.GetHandler(&request.Request{
+			RequestLine: request.RequestLine{
+				Method:        "POST",
+				RequestTarget: "/?a=true&b=false",
+			},
+		})
+		require.NotNil(t, got)
+
+		var buf bytes.Buffer
+		w := response.NewWriter(&buf)
+		err := got(w, &request.Request{
+			RequestLine: request.RequestLine{
+				Method:        "POST",
+				RequestTarget: "/?a=true&b=false",
+			},
+		})
+		require.NoError(t, err)
+		assert.Contains(t, buf.String(), "HTTP/1.1 405 Method Not Allowed\r\n")
+	}
 }
 
 func TestRouterNotFoundVsMethodNotAllowed(t *testing.T) {
