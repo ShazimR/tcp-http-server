@@ -254,6 +254,6 @@ If you understand this code, you understand:
 
 ## Author
 
-**Shazim Rahman**
+[<ins>**Shazim Rahman**</ins>](https://github.com/ShazimR)
 
 Built as an educational deep dive into HTTP, TCP, and systems programming in Go.
