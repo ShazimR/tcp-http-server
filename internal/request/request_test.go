@@ -138,6 +138,58 @@ func TestParseBody(t *testing.T) {
 	require.NotNil(t, r)
 	assert.Equal(t, "Hello World!\n", string(r.Body))
 
+	// Test: Chunk encoded body
+	reader = &chunkReader{
+		data: "POST /submit HTTP/1.1\r\n" +
+			"Host: localhost:8080\r\n" +
+			"Transfer-Encoding: chunked\r\n" +
+			"\r\n" +
+			"3\r\n" +
+			"Hel\r\n" +
+			"2\r\n" +
+			"lo\r\n" +
+			"2\r\n" +
+			" W\r\n" +
+			"4\r\n" +
+			"orld\r\n" +
+			"2\r\n" +
+			"!\n\r\n" +
+			"0\r\n" +
+			"\r\n",
+		numBytesPerRead: 1,
+	}
+	r, err = RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "Hello World!\n", string(r.Body))
+
+	// Test: Chunk encoded body with trailer
+	reader = &chunkReader{
+		data: "POST /submit HTTP/1.1\r\n" +
+			"Host: localhost:8080\r\n" +
+			"Transfer-Encoding: chunked\r\n" +
+			"Trailer: Expires\r\n" +
+			"\r\n" +
+			"3\r\n" +
+			"Hel\r\n" +
+			"2\r\n" +
+			"lo\r\n" +
+			"2\r\n" +
+			" W\r\n" +
+			"4\r\n" +
+			"orld\r\n" +
+			"2\r\n" +
+			"!\n\r\n" +
+			"0\r\n" +
+			"Expires: tomorrow\r\n" +
+			"\r\n",
+		numBytesPerRead: 1,
+	}
+	r, err = RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "Hello World!\n", string(r.Body))
+
 	// Test: Body shorter than reported content length
 	reader = &chunkReader{
 		data: "POST /submit HTTP/1.1\r\n" +
@@ -150,4 +202,74 @@ func TestParseBody(t *testing.T) {
 	r, err = RequestFromReader(reader)
 	require.Error(t, err)
 	assert.Equal(t, io.EOF, err)
+}
+
+func TestParseTrailer(t *testing.T) {
+	// Test: Trailer header included
+	reader := &chunkReader{
+		data: "POST /submit HTTP/1.1\r\n" +
+			"Host: localhost:8080\r\n" +
+			"Transfer-Encoding: chunked\r\n" +
+			"Trailer: Expires,Another\r\n" +
+			"\r\n" +
+			"3\r\n" +
+			"Hel\r\n" +
+			"2\r\n" +
+			"lo\r\n" +
+			"2\r\n" +
+			" W\r\n" +
+			"4\r\n" +
+			"orld\r\n" +
+			"2\r\n" +
+			"!\n\r\n" +
+			"0\r\n" +
+			"Expires: tomorrow\r\n" +
+			"Another: value\r\n" +
+			"\r\n",
+		numBytesPerRead: 1,
+	}
+	r, err := RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	expStr, ok := r.Trailer.Get("Expires")
+	assert.True(t, ok)
+	assert.Equal(t, "tomorrow", expStr)
+	anoStr, ok := r.Trailer.Get("Another")
+	assert.True(t, ok)
+	assert.Equal(t, "value", anoStr)
+	dneStr, ok := r.Trailer.Get("DoesNotExist")
+	assert.False(t, ok)
+	assert.Equal(t, "", dneStr)
+
+	// Test: Trailer header not included
+	reader = &chunkReader{
+		data: "POST /submit HTTP/1.1\r\n" +
+			"Host: localhost:8080\r\n" +
+			"Transfer-Encoding: chunked\r\n" +
+			"\r\n" +
+			"3\r\n" +
+			"Hel\r\n" +
+			"2\r\n" +
+			"lo\r\n" +
+			"2\r\n" +
+			" W\r\n" +
+			"4\r\n" +
+			"orld\r\n" +
+			"2\r\n" +
+			"!\n\r\n" +
+			"0\r\n" +
+			"Expires: tomorrow\r\n" +
+			"Another: value\r\n" +
+			"\r\n",
+		numBytesPerRead: 1,
+	}
+	r, err = RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	expStr, ok = r.Trailer.Get("Expires")
+	assert.False(t, ok)
+	assert.Equal(t, "", expStr)
+	anoStr, ok = r.Trailer.Get("Another")
+	assert.False(t, ok)
+	assert.Equal(t, "", anoStr)
 }
