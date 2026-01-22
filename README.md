@@ -227,10 +227,9 @@ This project intentionally does **not** implement:
 
 ## Future Work
 
-- Chunked request body parsing (`Transfer-Encoding: chunked`)
 - Persistent connections (`Connection: keep-alive`)
 - Middleware support (logging, recovery, authentication)
-- Path prefix routing
+- Path prefix routing (router groups)
 - Request body streaming (avoid full buffering)
 - Automatic `OPTIONS` handling and `Allow` headers
 - Content negotiation and compression
