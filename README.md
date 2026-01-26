@@ -1,3 +1,7 @@
+[![CI](https://github.com/ShazimR/tcp-http-server/actions/workflows/go.yml/badge.svg)](
+https://github.com/ShazimR/tcp-http-server/actions/workflows/go.yml
+)
+
 # tcp-http-server
 
 A **from-scratch HTTP/1.1 server written in Go**, built directly on top of TCP sockets.  
