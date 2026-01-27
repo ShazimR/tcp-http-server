@@ -13,7 +13,7 @@
     <header class="container">
       <h1>Router Tester</h1>
       <p class="muted">
-        Tests exact-path routing for GET / POST / PUT / DELETE / PATCH.
+        Tests routing + request parsing (method, path params, query params, body).
       </p>
     </header>
 
@@ -21,30 +21,153 @@
       <section class="card">
         <h2>Request</h2>
 
-        <label class="label">Path</label>
+        <label class="label" for="path">Base Path</label>
         <input id="path" class="input" value="/api/echo" />
 
-        <div class="row wrap">
-          <button class="btn" data-method="GET">GET</button>
-          <button class="btn" data-method="POST">POST</button>
-          <button class="btn" data-method="PUT">PUT</button>
-          <button class="btn" data-method="DELETE">DELETE</button>
-          <button class="btn" data-method="PATCH">PATCH</button>
-          <button class="btn" data-method="OPTIONS">OPTIONS</button>
+        <div class="two-col">
+          <div>
+            <label class="label" for="pathId">Path param id (for /api/echo/:id)</label>
+            <input id="pathId" class="input" value="123" />
+
+            <div class="row wrap gap-top">
+              <button id="useBaseEcho" class="btn secondary" type="button">
+                Use /api/echo
+              </button>
+              <button id="useIdEcho" class="btn secondary" type="button">
+                Use /api/echo/:id
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label class="label" for="query">Query params (one per line)</label>
+            <textarea id="queryGeneral" class="textarea textarea-sm" spellcheck="false">
+flag=true
+test=a=b
+empty=
+justflag
+            </textarea>
+            <p class="small muted gap-top">
+              Format: <code>key=value</code> or just <code>flag</code>.
+              Values are URL-encoded. Empty values are allowed.
+            </p>
+          </div>
         </div>
 
-        <label class="label">Body (JSON or text)</label>
-        <textarea id="body" class="textarea"></textarea>
+        <div class="row wrap gap-top">
+          <button class="btn" data-method="GET" type="button">GET</button>
+          <button class="btn" data-method="POST" type="button">POST</button>
+          <button class="btn" data-method="PUT" type="button">PUT</button>
+          <button class="btn" data-method="DELETE" type="button">DELETE</button>
+          <button class="btn" data-method="PATCH" type="button">PATCH</button>
+        </div>
+
+        <label class="label gap-top" for="body">Body (JSON or text)</label>
+        <textarea id="body" class="textarea" spellcheck="false"></textarea>
+
+        <details class="help">
+          <summary>Examples</summary>
+          <p>
+            Try:
+            <code>/api/echo/123?flag=true&amp;test=a%3Db</code>
+            <br />
+            Router matches on path only; request parser exposes QueryParams and PathParams.
+          </p>
+        </details>
+      </section>
+
+      <section class="card">
+        <h2>Path Param Test</h2>
+
+        <label class="label">User ID</label>
+        <input id="userid" class="input" placeholder="e.g. 7" />
+
+        <label class="label">Post ID</label>
+        <input id="postid" class="input" placeholder="e.g. 99" />
+
+        <label class="label">Query Params</label>
+        <input
+          id="queryUserPost"
+          class="input"
+          placeholder="e.g. view=full&sort=desc"
+        />
+
+        <div class="row wrap">
+          <button id="pathParamGet" class="btn secondary">
+            GET /api/users/:userid/posts/:postid
+          </button>
+          <button id="pathParamPost" class="btn secondary">
+            POST /api/users/:userid/posts/:postid
+          </button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>MP4 Test</h2>
+        <p class="small muted">
+          Click to fetch and play the MP4 (served as <code>Content-Length</code>).
+        </p>
+
+        <div class="row wrap">
+          <button id="loadVideo" class="btn secondary" type="button">Load /video</button>
+          <button id="unloadVideo" class="btn" type="button">Unload</button>
+        </div>
+
+        <video
+          id="video"
+          controls
+          preload="none"
+          style="margin-top:12px; width:100%; border-radius:12px; border:1px solid var(--border); background: rgba(0,0,0,0.25);"
+        ></video>
+
+        <pre id="videoStatus" class="output" style="margin-top:12px; height: 16vh; max-height: 16vh;"></pre>
+      </section>
+
+      <section class="card">
+        <h2>MP4 Test (chunked)</h2>
+        <p class="small muted">
+          Click to fetch <code>/video-chunked</code> (Transfer-Encoding: chunked), assemble the bytes, then play.
+        </p>
+
+        <div class="row wrap">
+          <button id="loadVideoChunked" class="btn secondary" type="button">
+            Fetch + Play (chunked)
+          </button>
+          <button id="unloadVideoChunked" class="btn" type="button">
+            Unload
+          </button>
+        </div>
+
+        <video
+          id="videoChunked"
+          controls
+          preload="none"
+          style="margin-top:12px; width:100%; border-radius:12px; border:1px solid var(--border); background: rgba(0,0,0,0.25);"
+        ></video>
+
+        <pre
+          id="videoChunkedStatus"
+          class="output"
+          style="margin-top:12px; height: 18vh; max-height: 18vh;"
+        ></pre>
+      </section>
+
+      <section class="card">
+        <h2>Request Preview</h2>
+        <p class="small muted">
+          Note: browsers add headers we can't read back (Host, User-Agent, etc.). This preview shows what our JS constructs.
+        </p>
+        <pre id="rawRequest" class="output"></pre>
       </section>
 
       <section class="card">
         <h2>Response</h2>
 
         <div class="row wrap">
-          <button id="rootCheck" class="btn secondary">GET /</button>
-          <button id="indexCheck" class="btn secondary">GET /index.html</button>
-          <button id="cssCheck" class="btn secondary">GET /styles.css</button>
-          <button id="jsCheck" class="btn secondary">GET /app.js</button>
+          <button id="rootCheck" class="btn secondary" type="button">GET /</button>
+          <button id="indexCheck" class="btn secondary" type="button">GET /index.html</button>
+          <button id="cssCheck" class="btn secondary" type="button">GET /styles.css</button>
+          <button id="jsCheck" class="btn secondary" type="button">GET /app.js</button>
         </div>
 
         <pre id="output" class="output"></pre>

@@ -2,152 +2,264 @@ package router
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/ShazimR/tcp-http-server/internal/request"
 	"github.com/ShazimR/tcp-http-server/internal/response"
 )
 
-type Method uint
+type method uint
 
 const (
-	GET Method = iota
-	POST
-	PUT
-	DELETE
-	PATCH
-	HEAD
-	CONNECT
-	OPTIONS
-	TRACE
-	MethodCount
+	methodGET method = iota
+	methodPOST
+	methodPUT
+	methodDELETE
+	methodPATCH
+	methodCount
 )
 
+var (
+	ErrInvalidHttpMethod      = fmt.Errorf("invalid http method")
+	ErrRequestTargetEmpty     = fmt.Errorf("request target is empty")
+	ErrMalformedRequestTarget = fmt.Errorf("malformed request target")
+	ErrAmbiguousPathParams    = fmt.Errorf("added ambiguous path params")
+)
+
+type routerNode struct {
+	token    string
+	isParam  bool
+	children []*routerNode
+	handlers [methodCount]response.Handler
+}
+
+func newRouterNode(token string, isParam bool) *routerNode {
+	if isParam {
+		token = token[1:]
+	}
+	return &routerNode{
+		token:    token,
+		isParam:  isParam,
+		children: []*routerNode{},
+		handlers: [methodCount]response.Handler{},
+	}
+}
+
+func (node *routerNode) addChild(child *routerNode) {
+	node.children = append(node.children, child)
+}
+
+func (node *routerNode) setMethodHandler(m method, handler response.Handler) error {
+	if m >= methodCount {
+		return ErrInvalidHttpMethod
+	}
+
+	node.handlers[m] = handler
+	return nil
+}
+
+func (node *routerNode) getStaticChild(token string) *routerNode {
+	for _, child := range node.children {
+		if !child.isParam && child.token == token {
+			return child
+		}
+	}
+
+	return nil
+}
+
+func (node *routerNode) getParamChild() *routerNode {
+	for _, child := range node.children {
+		if child.isParam {
+			return child
+		}
+	}
+
+	return nil
+}
+
+func (node *routerNode) matchChild(token string) (child *routerNode, usedParam bool) {
+	if c := node.getStaticChild(token); c != nil {
+		return c, false
+	}
+
+	if c := node.getParamChild(); c != nil {
+		return c, true
+	}
+
+	return nil, false
+}
+
+func (node *routerNode) getHandler(m method) (response.Handler, error) {
+	if m >= methodCount {
+		return notFoundHandler, ErrInvalidHttpMethod
+	}
+
+	return node.handlers[m], nil
+}
+
 type Router struct {
-	routes [MethodCount]map[string]response.Handler
+	routes *routerNode
 }
 
 func NewRouter() *Router {
-	routes := [MethodCount]map[string]response.Handler{}
-	for i := range routes {
-		routes[i] = make(map[string]response.Handler)
+	head := newRouterNode("/", false)
+	return &Router{routes: head}
+}
+
+func (r *Router) addRoute(tokens []string, m method, handler response.Handler) error {
+	runner := r.routes
+	for _, token := range tokens {
+		isParam := len(token) > 0 && token[0] == ':'
+
+		var node *routerNode
+		if isParam {
+			node = runner.getParamChild()
+			if node == nil {
+				node = newRouterNode(token, true)
+				runner.addChild(node)
+
+			} else {
+				if node.token != token[1:] {
+					return ErrAmbiguousPathParams
+				}
+			}
+
+		} else {
+			node = runner.getStaticChild(token)
+			if node == nil {
+				node = newRouterNode(token, false)
+				runner.addChild(node)
+			}
+		}
+
+		runner = node
 	}
-	return &Router{routes: routes}
+
+	return runner.setMethodHandler(m, handler)
 }
 
-func (r *Router) GET(path string, handler response.Handler) {
-	r.routes[GET][getNormalizedPath(path)] = handler
+func (r *Router) GET(path string, handler response.Handler) error {
+	tokens, err := getTokens(path)
+	if err != nil {
+		return err
+	}
+
+	return r.addRoute(tokens, methodGET, handler)
 }
 
-func (r *Router) POST(path string, handler response.Handler) {
-	r.routes[POST][getNormalizedPath(path)] = handler
+func (r *Router) POST(path string, handler response.Handler) error {
+	tokens, err := getTokens(path)
+	if err != nil {
+		return err
+	}
+
+	return r.addRoute(tokens, methodPOST, handler)
 }
 
-func (r *Router) PUT(path string, handler response.Handler) {
-	r.routes[PUT][getNormalizedPath(path)] = handler
+func (r *Router) PUT(path string, handler response.Handler) error {
+	tokens, err := getTokens(path)
+	if err != nil {
+		return err
+	}
+
+	return r.addRoute(tokens, methodPUT, handler)
 }
 
-func (r *Router) DELETE(path string, handler response.Handler) {
-	r.routes[DELETE][getNormalizedPath(path)] = handler
+func (r *Router) DELETE(path string, handler response.Handler) error {
+	tokens, err := getTokens(path)
+	if err != nil {
+		return err
+	}
+
+	return r.addRoute(tokens, methodDELETE, handler)
 }
 
-func (r *Router) PATCH(path string, handler response.Handler) {
-	r.routes[PATCH][getNormalizedPath(path)] = handler
-}
+func (r *Router) PATCH(path string, handler response.Handler) error {
+	tokens, err := getTokens(path)
+	if err != nil {
+		return err
+	}
 
-func (r *Router) HEAD(path string, handler response.Handler) {
-	r.routes[HEAD][getNormalizedPath(path)] = handler
-}
-
-func (r *Router) CONNECT(path string, handler response.Handler) {
-	r.routes[CONNECT][getNormalizedPath(path)] = handler
-}
-
-func (r *Router) OPTIONS(path string, handler response.Handler) {
-	r.routes[OPTIONS][getNormalizedPath(path)] = handler
-}
-
-func (r *Router) TRACE(path string, handler response.Handler) {
-	r.routes[TRACE][getNormalizedPath(path)] = handler
+	return r.addRoute(tokens, methodPATCH, handler)
 }
 
 func (r *Router) GetHandler(req *request.Request) response.Handler {
-	method := getMethod(req.RequestLine.Method)
-	path := getNormalizedPath(req.RequestLine.RequestTarget)
-
-	if method < MethodCount {
-		m := r.routes[method]
-		if h, ok := m[path]; ok {
-			return h
-		}
+	m := getMethod(req.RequestLine.Method)
+	if m >= methodCount {
+		return notFoundHandler
 	}
 
-	for _, m := range r.routes {
-		if _, ok := m[path]; ok {
-			return methodNotAllowedHandler
-		}
+	tokens, err := getTokens(req.RequestLine.RequestTarget)
+	if err != nil {
+		return notFoundHandler
 	}
 
-	return notFoundHandler
+	runner := r.routes
+	for _, token := range tokens {
+		node, usedParam := runner.matchChild(token)
+		if node == nil {
+			return notFoundHandler
+		}
+
+		if usedParam {
+			req.PathParams[node.token] = token
+		}
+
+		runner = node
+	}
+
+	handler, err := runner.getHandler(m)
+	if err != nil {
+		return notFoundHandler
+	}
+
+	if handler == nil {
+		for _, h := range runner.handlers {
+			if h != nil {
+				return methodNotAllowedHandler
+			}
+		}
+
+		return notFoundHandler
+	}
+
+	return handler
 }
 
-func getNormalizedPath(path string) string {
-	i := strings.IndexByte(path, '?')
-	if i == -1 {
-		return path
+func getTokens(path string) ([]string, error) {
+	if len(path) == 0 {
+		return nil, ErrRequestTargetEmpty
 	}
-	if i == len(path)-1 {
-		return path[:i]
+	if path[0] != '/' {
+		return nil, ErrMalformedRequestTarget
 	}
-
-	normalizedPath := path[:i]
-	params := []string{}
-	queryStr := path[i+1:]
-	queries := strings.Split(queryStr, "&")
-
-	for _, query := range queries {
-		if k, _, hasEq := strings.Cut(query, "="); hasEq || k != "" {
-			params = append(params, k)
-		}
+	if path == "/" {
+		return []string{}, nil
 	}
 
-	slices.Sort(params)
-
-	for _, param := range params {
-		normalizedPath += fmt.Sprintf("&%s", param)
-	}
-
-	return normalizedPath
+	return strings.Split(path[1:], "/"), nil
 }
 
-func getMethod(s string) Method {
-	var method Method
+func getMethod(s string) method {
+	var m method
 
 	switch s {
 	case "GET":
-		method = GET
+		m = methodGET
 	case "POST":
-		method = POST
+		m = methodPOST
 	case "PUT":
-		method = PUT
+		m = methodPUT
 	case "DELETE":
-		method = DELETE
+		m = methodDELETE
 	case "PATCH":
-		method = PATCH
-	case "HEAD":
-		method = HEAD
-	case "CONNECT":
-		method = CONNECT
-	case "OPTIONS":
-		method = OPTIONS
-	case "TRACE":
-		method = TRACE
+		m = methodPATCH
 	default:
-		method = MethodCount
+		m = methodCount
 	}
 
-	return method
+	return m
 }
 
 func methodNotAllowedHandler(w *response.Writer, req *request.Request) error {
