@@ -22,12 +22,13 @@ type RequestLine struct {
 }
 
 type Request struct {
-	RequestLine RequestLine
-	Headers     *headers.Headers
-	Body        []byte
-	Trailer     *headers.Headers
-	Params      map[string]string
-	state       parserState
+	RequestLine   RequestLine
+	Headers       *headers.Headers
+	Body          []byte
+	Trailer       *headers.Headers
+	RequestParams map[string]string
+	PathParams    map[string]string
+	state         parserState
 }
 
 var (
@@ -65,11 +66,12 @@ func getInt(headers *headers.Headers, name string, defaultValue int) int {
 
 func newRequest() *Request {
 	return &Request{
-		state:   StateInit,
-		Headers: headers.NewHeaders(),
-		Body:    []byte{},
-		Trailer: headers.NewHeaders(),
-		Params:  make(map[string]string),
+		state:         StateInit,
+		Headers:       headers.NewHeaders(),
+		Body:          []byte{},
+		Trailer:       headers.NewHeaders(),
+		RequestParams: make(map[string]string),
+		PathParams:    make(map[string]string),
 	}
 }
 
@@ -267,7 +269,7 @@ func parseChunkData(b []byte, r *Request) int {
 	return read
 }
 
-func parseQueryParameters(r *Request) error {
+func parseRequestParameters(r *Request) error {
 	target := r.RequestLine.RequestTarget
 
 	if i := strings.IndexByte(target, '?'); i != -1 && i < len(target)-1 {
@@ -276,15 +278,17 @@ func parseQueryParameters(r *Request) error {
 
 		for _, query := range queries {
 			if k, v, hasEq := strings.Cut(query, "="); hasEq {
-				r.Params[k] = v
+				r.RequestParams[k] = v
 
 			} else if k != "" {
-				r.Params[k] = ""
+				r.RequestParams[k] = ""
 
 			} else {
 				return ErrMalformedRequestLine
 			}
 		}
+
+		r.RequestLine.RequestTarget = target[:i]
 	}
 
 	return nil
@@ -313,7 +317,7 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 		bufLen -= readN
 	}
 
-	if err := parseQueryParameters(request); err != nil {
+	if err := parseRequestParameters(request); err != nil {
 		return nil, err
 	}
 

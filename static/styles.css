@@ -185,3 +185,16 @@ select {
     margin: 10px 0 0;
     color: var(--muted);
 }
+
+.gap-top {
+    margin-top: 10px;
+}
+
+.textarea-sm {
+    height: 14vh;
+    max-height: 14vh;
+}
+
+code {
+    color: var(--accent);
+}
