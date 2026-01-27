@@ -1,0 +1,10 @@
+services:
+  tcp-http-server:
+    image: shazimr/tcp-http-server 
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tcp-http-server
+    ports:
+      - "8080:8080"
+    restart: unless-stopped

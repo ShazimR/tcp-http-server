@@ -1,0 +1,20 @@
+# Git / CI
+.git
+.github
+
+# Local junk
+tmp
+tmp/*
+
+# Docs
+README.md
+
+# Editor / OS
+.vscode
+.DS_Store
+
+# Build artifacts
+out
+
+# Docker files
+docker-compose
