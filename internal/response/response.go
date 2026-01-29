@@ -9,13 +9,15 @@ import (
 	"github.com/ShazimR/tcp-http-server/internal/request"
 )
 
-type StatusCode int
+type StatusCode uint
 
 const (
 	StatusOK                  StatusCode = 200
+	StatusPartialContent      StatusCode = 206
 	StatusBadRequest          StatusCode = 400
 	StatusNotFound            StatusCode = 404
 	StatusMethodNotAllowed    StatusCode = 405
+	StatusRangeNotSatisfiable StatusCode = 416
 	StatusInternalServerError StatusCode = 500
 )
 
@@ -39,12 +41,16 @@ func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 	switch statusCode {
 	case StatusOK:
 		statusLine = []byte("HTTP/1.1 200 OK\r\n")
+	case StatusPartialContent:
+		statusLine = []byte("HTTP/1.1 206 Partial Content\r\n")
 	case StatusBadRequest:
 		statusLine = []byte("HTTP/1.1 400 Bad Request\r\n")
 	case StatusNotFound:
 		statusLine = []byte("HTTP/1.1 404 Not Found\r\n")
 	case StatusMethodNotAllowed:
 		statusLine = []byte("HTTP/1.1 405 Method Not Allowed\r\n")
+	case StatusRangeNotSatisfiable:
+		statusLine = []byte("HTTP/1.1 416 Range Not Satisfiable")
 	case StatusInternalServerError:
 		statusLine = []byte("HTTP/1.1 500 Internal Server Error\r\n")
 	default:
