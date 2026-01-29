@@ -9,8 +9,10 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 
+	"github.com/ShazimR/tcp-http-server/internal/headers"
 	"github.com/ShazimR/tcp-http-server/internal/request"
 	"github.com/ShazimR/tcp-http-server/internal/response"
 	"github.com/ShazimR/tcp-http-server/internal/router"
@@ -25,21 +27,133 @@ type TestResponse struct {
 	Timestamp uint64 `json:"ts"`
 }
 
-func serveStatic(filename string, contentType string, w *response.Writer) error {
-	status := response.StatusOK
+var (
+	ErrRangeOutOfBounds = fmt.Errorf("range start out of bounds")
+	ErrRangeEndLtStart  = fmt.Errorf("range end < start")
+)
+
+func parseRange(s string) (start int, end int, endprovided bool, ok bool) {
+	prefix := "bytes="
+	if !strings.HasPrefix(s, prefix) {
+		return 0, 0, false, false
+	}
+
+	rangeStr := strings.TrimPrefix(s, prefix)
+	parts := strings.SplitN(rangeStr, "-", 2)
+	if len(parts) != 2 {
+		return 0, 0, false, false
+	}
+
+	if parts[0] == "" {
+		return 0, 0, false, false
+	}
+
+	st, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return 0, 0, false, false
+	}
+
+	if parts[1] == "" {
+		return st, 0, false, true
+	}
+
+	en, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return 0, 0, false, true
+	}
+
+	return st, en, true, true
+}
+
+func loadRange(filename string, start int, end int, endProvided bool) (filessize int, body []byte, usedEnd int, err error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return 0, nil, 0, err
+	}
+	defer f.Close()
+
+	info, err := f.Stat()
+	if err != nil {
+		return 0, nil, 0, err
+	}
+
+	size64 := info.Size()
+	if size64 <= 0 {
+		return int(size64), nil, -1, ErrRangeOutOfBounds
+	}
+	size := int(size64)
+
+	if start >= size {
+		return size, nil, 0, ErrRangeOutOfBounds
+	}
+
+	if !endProvided {
+		end = size - 1
+	} else {
+		if end < start {
+			return size, nil, 0, ErrRangeEndLtStart
+		}
+		if end >= size {
+			end = size - 1 // clamp
+		}
+	}
+
+	n := (end - start) + 1
+
+	if _, err := f.Seek(int64(start), io.SeekStart); err != nil {
+		return size, nil, 0, err
+	}
+
+	buf := make([]byte, n)
+	if _, err := io.ReadFull(f, buf); err != nil {
+		return size, nil, 0, err
+	}
+
+	return size, buf, end, nil
+}
+
+func serveStatic(filename string, contentType string, reqH *headers.Headers, w *response.Writer) error {
 	h := response.GetDefaultHeaders(0)
 	h.Replace("Content-Type", contentType)
+	h.Set("Accept-Ranges", "bytes")
+
+	if rangeStr, ok := reqH.Get("Range"); ok {
+		start, end, endProvided, ok := parseRange(rangeStr)
+		if !ok {
+			body := []byte("invalid range")
+			h.Replace("Content-Type", "text/plain")
+			h.Replace("Content-Length", strconv.Itoa(len(body)))
+			return w.WriteResponse(response.StatusBadRequest, h, body)
+		}
+
+		fileSize, body, usedEnd, err := loadRange(filename, start, end, endProvided)
+		if errors.Is(err, ErrRangeEndLtStart) || errors.Is(err, ErrRangeOutOfBounds) {
+			body = []byte("invalid range provided")
+			h.Replace("Content-Type", "text/plain")
+			h.Replace("Content-Length", strconv.Itoa(len(body)))
+			h.Set("Content-Range", fmt.Sprintf("bytes */%d", fileSize))
+			return w.WriteResponse(response.StatusRangeNotSatisfiable, h, body)
+		}
+		if err != nil {
+			body = []byte("error loading range")
+			h.Replace("Content-Type", "text/plain")
+			h.Replace("Content-Length", strconv.Itoa(len(body)))
+			return w.WriteResponse(response.StatusInternalServerError, h, body)
+		}
+
+		h.Replace("Content-Length", strconv.Itoa(len(body)))
+		h.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, usedEnd, fileSize))
+		return w.WriteResponse(response.StatusPartialContent, h, body)
+	}
 
 	body, err := os.ReadFile(filename)
 	if err != nil {
-		status = response.StatusInternalServerError
 		body = []byte("error loading file")
 		h.Replace("Content-Type", "text/plain")
 	}
 
 	h.Replace("Content-Length", strconv.Itoa(len(body)))
-	err = w.WriteResponse(status, h, body)
-	return err
+	return w.WriteResponse(response.StatusOK, h, body)
 }
 
 func serveChunked(filename string, contentType string, w *response.Writer) error {
@@ -91,45 +205,55 @@ func serveChunked(filename string, contentType string, w *response.Writer) error
 
 // Static handlers
 func serveIndex(w *response.Writer, req *request.Request) error {
-	return serveStatic("./static/index.html", "text/html", w)
+	return serveStatic("./static/index.html", "text/html", req.Headers, w)
 }
 
 func serveFavicon(w *response.Writer, req *request.Request) error {
-	return serveStatic("./static/favicon.ico", "image/x-icon", w)
+	return serveStatic("./static/favicon.ico", "image/x-icon", req.Headers, w)
 }
 
 func serveStyles(w *response.Writer, req *request.Request) error {
-	return serveStatic("./static/styles.css", "text/css", w)
+	return serveStatic("./static/styles.css", "text/css", req.Headers, w)
 }
 
 func serveApp(w *response.Writer, req *request.Request) error {
-	return serveStatic("./static/app.js", "text/javascript", w)
+	return serveStatic("./static/app.js", "text/javascript", req.Headers, w)
 }
 
 func serveVideo(w *response.Writer, req *request.Request) error {
 	method := req.RequestLine.Method
 	path := req.RequestLine.RequestTarget
 	bodyStr := parseDemoBody(req)
+	headerStr := ""
+	req.Headers.ForEach(func(name, value string) {
+		headerStr += fmt.Sprintf("  - %s: %s\n", name, value)
+	})
 
 	fmt.Printf("Method:      %s\n", method)
 	fmt.Printf("Path:        %s\n", path)
 	fmt.Printf("QueryParams: %s\n", req.RequestParams)
 	fmt.Printf("Body:        %s\n", bodyStr)
-	fmt.Printf("Raw:         %s\n\n", req.Body)
+	fmt.Printf("Raw:         %s\n", req.Body)
+	fmt.Printf("Headers:\n%s\n", headerStr)
 
-	return serveStatic("./static/one-last-breath.mp4", "video/mp4", w)
+	return serveStatic("./static/one-last-breath.mp4", "video/mp4", req.Headers, w)
 }
 
 func serveVideoChunked(w *response.Writer, req *request.Request) error {
 	method := req.RequestLine.Method
 	path := req.RequestLine.RequestTarget
 	bodyStr := parseDemoBody(req)
+	headerStr := ""
+	req.Headers.ForEach(func(name, value string) {
+		headerStr += fmt.Sprintf("  - %s: %s\n", name, value)
+	})
 
 	fmt.Printf("Method:      %s\n", method)
 	fmt.Printf("Path:        %s\n", path)
 	fmt.Printf("QueryParams: %s\n", req.RequestParams)
 	fmt.Printf("Body:        %s\n", bodyStr)
-	fmt.Printf("Raw:         %s\n\n", req.Body)
+	fmt.Printf("Raw:         %s\n", req.Body)
+	fmt.Printf("Headers:\n%s\n", headerStr)
 
 	return serveChunked("./static/one-last-breath.mp4", "video/mp4", w)
 }
