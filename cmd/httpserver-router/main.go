@@ -12,7 +12,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/ShazimR/tcp-http-server/internal/headers"
 	"github.com/ShazimR/tcp-http-server/internal/request"
 	"github.com/ShazimR/tcp-http-server/internal/response"
 	"github.com/ShazimR/tcp-http-server/internal/router"
@@ -20,7 +19,8 @@ import (
 )
 
 const port = 8080
-const maxChunkSize = 1024
+const KiB = 1024 // bytes
+const maxChunkSize = 32 * KiB
 
 type TestResponse struct {
 	Message   string `json:"msg"`
@@ -59,7 +59,7 @@ func parseRange(s string) (start int, end int, endprovided bool, ok bool) {
 
 	en, err := strconv.Atoi(parts[1])
 	if err != nil {
-		return 0, 0, false, true
+		return 0, 0, false, false
 	}
 
 	return st, en, true, true
@@ -112,12 +112,42 @@ func loadRange(filename string, start int, end int, endProvided bool) (filessize
 	return size, buf, end, nil
 }
 
-func serveStatic(filename string, contentType string, reqH *headers.Headers, w *response.Writer) error {
+func parseDemoBody(req *request.Request) string {
+	var reqBody TestResponse
+	if err := json.Unmarshal(req.Body, &reqBody); err != nil {
+		return "failed to parse body or body was empty"
+	}
+	return fmt.Sprintf("msg: %s | ts: %d", reqBody.Message, reqBody.Timestamp)
+}
+
+func logReq(req *request.Request, extraPrint func()) {
+	method := req.RequestLine.Method
+	path := req.RequestLine.RequestTarget
+	bodyStr := parseDemoBody(req)
+	headerStr := ""
+	req.Headers.ForEach(func(name, value string) {
+		headerStr += fmt.Sprintf("  - %s: %s\n", name, value)
+	})
+
+	fmt.Printf("Method:      %s\n", method)
+	fmt.Printf("Path:        %s\n", path)
+	if extraPrint != nil {
+		extraPrint()
+	}
+	fmt.Printf("QueryParams: %s\n", req.RequestParams)
+	fmt.Printf("Headers:\n%s", headerStr)
+	fmt.Printf("Body:        %s\n", bodyStr)
+	fmt.Printf("Raw:         %s\n\n", req.Body)
+}
+
+func serveStatic(filename string, contentType string, req *request.Request, w *response.Writer) error {
+	logReq(req, nil)
+
 	h := response.GetDefaultHeaders(0)
 	h.Replace("Content-Type", contentType)
 	h.Set("Accept-Ranges", "bytes")
 
-	if rangeStr, ok := reqH.Get("Range"); ok {
+	if rangeStr, ok := req.Headers.Get("Range"); ok {
 		start, end, endProvided, ok := parseRange(rangeStr)
 		if !ok {
 			body := []byte("invalid range")
@@ -205,69 +235,33 @@ func serveChunked(filename string, contentType string, w *response.Writer) error
 
 // Static handlers
 func serveIndex(w *response.Writer, req *request.Request) error {
-	return serveStatic("./static/index.html", "text/html", req.Headers, w)
+	return serveStatic("./static/index.html", "text/html", req, w)
 }
 
 func serveFavicon(w *response.Writer, req *request.Request) error {
-	return serveStatic("./static/favicon.ico", "image/x-icon", req.Headers, w)
+	return serveStatic("./static/favicon.ico", "image/x-icon", req, w)
 }
 
 func serveStyles(w *response.Writer, req *request.Request) error {
-	return serveStatic("./static/styles.css", "text/css", req.Headers, w)
+	return serveStatic("./static/styles.css", "text/css", req, w)
 }
 
 func serveApp(w *response.Writer, req *request.Request) error {
-	return serveStatic("./static/app.js", "text/javascript", req.Headers, w)
+	return serveStatic("./static/app.js", "text/javascript", req, w)
 }
 
 func serveVideo(w *response.Writer, req *request.Request) error {
-	method := req.RequestLine.Method
-	path := req.RequestLine.RequestTarget
-	bodyStr := parseDemoBody(req)
-	headerStr := ""
-	req.Headers.ForEach(func(name, value string) {
-		headerStr += fmt.Sprintf("  - %s: %s\n", name, value)
-	})
-
-	fmt.Printf("Method:      %s\n", method)
-	fmt.Printf("Path:        %s\n", path)
-	fmt.Printf("QueryParams: %s\n", req.RequestParams)
-	fmt.Printf("Body:        %s\n", bodyStr)
-	fmt.Printf("Raw:         %s\n", req.Body)
-	fmt.Printf("Headers:\n%s\n", headerStr)
-
-	return serveStatic("./static/one-last-breath.mp4", "video/mp4", req.Headers, w)
+	return serveStatic("./static/one-last-breath.mp4", "video/mp4", req, w)
 }
 
 func serveVideoChunked(w *response.Writer, req *request.Request) error {
-	method := req.RequestLine.Method
-	path := req.RequestLine.RequestTarget
-	bodyStr := parseDemoBody(req)
-	headerStr := ""
-	req.Headers.ForEach(func(name, value string) {
-		headerStr += fmt.Sprintf("  - %s: %s\n", name, value)
-	})
-
-	fmt.Printf("Method:      %s\n", method)
-	fmt.Printf("Path:        %s\n", path)
-	fmt.Printf("QueryParams: %s\n", req.RequestParams)
-	fmt.Printf("Body:        %s\n", bodyStr)
-	fmt.Printf("Raw:         %s\n", req.Body)
-	fmt.Printf("Headers:\n%s\n", headerStr)
-
+	logReq(req, nil)
 	return serveChunked("./static/one-last-breath.mp4", "video/mp4", w)
 }
 
-// Shared helper for printing/parsing the demo JSON body
-func parseDemoBody(req *request.Request) string {
-	var reqBody TestResponse
-	if err := json.Unmarshal(req.Body, &reqBody); err != nil {
-		return "failed to parse body or body was empty"
-	}
-	return fmt.Sprintf("msg: %s | ts: %d", reqBody.Message, reqBody.Timestamp)
-}
-
 func echo(w *response.Writer, req *request.Request) error {
+	logReq(req, nil)
+
 	status := response.StatusOK
 	h := response.GetDefaultHeaders(0)
 	h.Replace("Content-Type", "application/json")
@@ -275,12 +269,6 @@ func echo(w *response.Writer, req *request.Request) error {
 	method := req.RequestLine.Method
 	path := req.RequestLine.RequestTarget
 	bodyStr := parseDemoBody(req)
-
-	fmt.Printf("Method:      %s\n", method)
-	fmt.Printf("Path:        %s\n", path)
-	fmt.Printf("QueryParams: %s\n", req.RequestParams)
-	fmt.Printf("Body:        %s\n", bodyStr)
-	fmt.Printf("Raw:         %s\n\n", req.Body)
 
 	resp := map[string]any{
 		"Method":      method,
@@ -302,6 +290,8 @@ func echo(w *response.Writer, req *request.Request) error {
 
 // Echo that also includes path params in the response
 func echoParams(w *response.Writer, req *request.Request) error {
+	logReq(req, func() { fmt.Printf("PathParams:  %s\n", req.PathParams) })
+
 	status := response.StatusOK
 	h := response.GetDefaultHeaders(0)
 	h.Replace("Content-Type", "application/json")
@@ -309,13 +299,6 @@ func echoParams(w *response.Writer, req *request.Request) error {
 	method := req.RequestLine.Method
 	path := req.RequestLine.RequestTarget
 	bodyStr := parseDemoBody(req)
-
-	fmt.Printf("Method:      %s\n", method)
-	fmt.Printf("Path:        %s\n", path)
-	fmt.Printf("PathParams:  %s\n", req.PathParams)
-	fmt.Printf("QueryParams: %s\n", req.RequestParams)
-	fmt.Printf("Body:        %s\n", bodyStr)
-	fmt.Printf("RawBody:     %s\n\n", req.Body)
 
 	resp := map[string]any{
 		"Method":      method,
@@ -337,8 +320,13 @@ func echoParams(w *response.Writer, req *request.Request) error {
 }
 
 func main() {
-	// Static assets
+	// Routers
 	r := router.NewRouter()
+	api := r.Group("/api")
+	echoRouter := api.Group("/echo")
+	userPosts := api.Group("/users/:userid/posts/:postid")
+
+	// Static assets
 	r.GET("/", serveIndex)
 	r.GET("/index.html", serveIndex)
 	r.GET("/favicon.ico", serveFavicon)
@@ -349,24 +337,24 @@ func main() {
 
 	// Base echo (no path params needed)
 	// Example target /api/echo?flag=true&test=a=b
-	r.GET("/api/echo", echo)
-	r.POST("/api/echo", echo)
-	r.PUT("/api/echo", echo)
-	r.DELETE("/api/echo", echo)
-	r.PATCH("/api/echo", echo)
+	echoRouter.GET("/", echo)
+	echoRouter.POST("/", echo)
+	echoRouter.PUT("/", echo)
+	echoRouter.DELETE("/", echo)
+	echoRouter.PATCH("/", echo)
 
 	// Path param-aware echo
 	// Example target /api/echo/123?flag=true&test=a=b
-	r.GET("/api/echo/:id", echoParams)
-	r.POST("/api/echo/:id", echoParams)
-	r.PUT("/api/echo/:id", echoParams)
-	r.DELETE("/api/echo/:id", echoParams)
-	r.PATCH("/api/echo/:id", echoParams)
+	echoRouter.GET("/:id", echoParams)
+	echoRouter.POST("/:id", echoParams)
+	echoRouter.PUT("/:id", echoParams)
+	echoRouter.DELETE("/:id", echoParams)
+	echoRouter.PATCH("/:id", echoParams)
 
 	// Multi path param example
 	// Example target /api/users/7/posts/99?view=full
-	r.GET("/api/users/:userid/posts/:postid", echoParams)
-	r.POST("/api/users/:userid/posts/:postid", echoParams)
+	userPosts.GET("/", echoParams)
+	userPosts.POST("/", echoParams)
 
 	// Setup and run server
 	s, err := server.Serve(port, nil, r)

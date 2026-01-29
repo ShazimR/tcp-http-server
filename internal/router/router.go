@@ -100,11 +100,29 @@ func (node *routerNode) getHandler(m method) (response.Handler, error) {
 
 type Router struct {
 	routes *routerNode
+	prefix string
 }
 
 func NewRouter() *Router {
 	head := newRouterNode("/", false)
-	return &Router{routes: head}
+	return &Router{
+		routes: head,
+		prefix: "",
+	}
+}
+
+func (r *Router) withPrefix(path string) (string, error) {
+	if r.prefix == "" {
+		return path, nil
+	}
+	if path == "/" || path == "" {
+		return r.prefix, nil
+	}
+	if path[0] != '/' {
+		return path, ErrMalformedRequestTarget
+	}
+
+	return (r.prefix + path), nil
 }
 
 func (r *Router) addRoute(tokens []string, m method, handler response.Handler) error {
@@ -140,7 +158,12 @@ func (r *Router) addRoute(tokens []string, m method, handler response.Handler) e
 }
 
 func (r *Router) GET(path string, handler response.Handler) error {
-	tokens, err := getTokens(path)
+	fullPath, err := r.withPrefix(path)
+	if err != nil {
+		return err
+	}
+
+	tokens, err := getTokens(fullPath)
 	if err != nil {
 		return err
 	}
@@ -149,7 +172,12 @@ func (r *Router) GET(path string, handler response.Handler) error {
 }
 
 func (r *Router) POST(path string, handler response.Handler) error {
-	tokens, err := getTokens(path)
+	fullPath, err := r.withPrefix(path)
+	if err != nil {
+		return err
+	}
+
+	tokens, err := getTokens(fullPath)
 	if err != nil {
 		return err
 	}
@@ -158,7 +186,12 @@ func (r *Router) POST(path string, handler response.Handler) error {
 }
 
 func (r *Router) PUT(path string, handler response.Handler) error {
-	tokens, err := getTokens(path)
+	fullPath, err := r.withPrefix(path)
+	if err != nil {
+		return err
+	}
+
+	tokens, err := getTokens(fullPath)
 	if err != nil {
 		return err
 	}
@@ -167,7 +200,12 @@ func (r *Router) PUT(path string, handler response.Handler) error {
 }
 
 func (r *Router) DELETE(path string, handler response.Handler) error {
-	tokens, err := getTokens(path)
+	fullPath, err := r.withPrefix(path)
+	if err != nil {
+		return err
+	}
+
+	tokens, err := getTokens(fullPath)
 	if err != nil {
 		return err
 	}
@@ -176,12 +214,35 @@ func (r *Router) DELETE(path string, handler response.Handler) error {
 }
 
 func (r *Router) PATCH(path string, handler response.Handler) error {
-	tokens, err := getTokens(path)
+	fullPath, err := r.withPrefix(path)
+	if err != nil {
+		return err
+	}
+
+	tokens, err := getTokens(fullPath)
 	if err != nil {
 		return err
 	}
 
 	return r.addRoute(tokens, methodPATCH, handler)
+}
+
+func (r *Router) Group(prefix string) *Router {
+	var newPrefix string
+	if prefix == "/" || prefix == "" {
+		newPrefix = ""
+
+	} else if !strings.HasPrefix(prefix, "/") {
+		newPrefix = "/" + strings.TrimSuffix(prefix, "/")
+
+	} else {
+		newPrefix = strings.TrimSuffix(prefix, "/")
+	}
+
+	return &Router{
+		routes: r.routes,
+		prefix: r.prefix + newPrefix,
+	}
 }
 
 func (r *Router) GetHandler(req *request.Request) response.Handler {
@@ -238,7 +299,9 @@ func getTokens(path string) ([]string, error) {
 		return []string{}, nil
 	}
 
-	return strings.Split(path[1:], "/"), nil
+	path = strings.TrimPrefix(path, "/")
+	path = strings.TrimSuffix(path, "/")
+	return strings.Split(path, "/"), nil
 }
 
 func getMethod(s string) method {
