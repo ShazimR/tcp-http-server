@@ -3,10 +3,12 @@ package response
 import (
 	"bytes"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
 	"github.com/ShazimR/tcp-http-server/internal/headers"
+	"github.com/ShazimR/tcp-http-server/internal/request"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,6 +49,66 @@ func (ew *errWriter) Write(p []byte) (int, error) {
 type zeroWriter struct{}
 
 func (zw *zeroWriter) Write(p []byte) (int, error) { return 0, nil }
+
+type badReadSeeker struct{}
+
+func (badReadSeeker) Read(p []byte) (int, error)                   { return 0, errors.New("readfail") }
+func (badReadSeeker) Seek(offset int64, whence int) (int64, error) { return 0, nil }
+
+type badSeek struct {
+	data []byte
+}
+
+func (b *badSeek) Read(p []byte) (int, error) {
+	if len(b.data) == 0 {
+		return 0, io.EOF
+	}
+	n := copy(p, b.data)
+	b.data = b.data[n:]
+	return n, nil
+}
+
+func (b *badSeek) Seek(offset int64, whence int) (int64, error) {
+	return 0, errors.New("seekfail")
+}
+
+func mkReq(method, target string) *request.Request {
+	return &request.Request{
+		RequestLine: request.RequestLine{
+			Method:        method,
+			RequestTarget: target,
+		},
+		Headers:    headers.NewHeaders(),
+		PathParams: make(map[string]string),
+		// your Request always has these initialized in RequestFromReader,
+		// but for these unit tests we only need headers + requestline.
+		RequestParams: make(map[string]string),
+	}
+}
+
+func statusLineOf(out string) string {
+	i := strings.Index(out, "\r\n")
+	if i == -1 {
+		return out
+	}
+	return out[:i+2]
+}
+
+func headerBlock(out string) string {
+	i := strings.Index(out, "\r\n\r\n")
+	if i == -1 {
+		return out
+	}
+	return out[:i+4]
+}
+
+func bodyOf(out string) string {
+	i := strings.Index(out, "\r\n\r\n")
+	if i == -1 {
+		return ""
+	}
+	return out[i+4:]
+}
 
 func TestWriteStatusLine(t *testing.T) {
 	// Test: Good status line
@@ -251,6 +313,190 @@ func TestWriteResponse(t *testing.T) {
 	assert.True(t, errors.Is(err, ErrFailedToWrite))
 }
 
+func TestWritePartialContentResponse_NoRange_Returns200FullBody(t *testing.T) {
+	content := []byte("hello-world")
+	req := mkReq("GET", "/video")
+	// no Range header
+
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+
+	rs := bytes.NewReader(content) // ReadSeeker
+	err := w.WritePartialContentResponse(rs, len(content), "video/mp4", req)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Equal(t, "HTTP/1.1 200 OK\r\n", statusLineOf(out))
+
+	hb := headerBlock(out)
+	assert.Contains(t, hb, "content-type: video/mp4\r\n")
+	assert.Contains(t, hb, "accept-ranges: bytes\r\n")
+	assert.Contains(t, hb, "content-length: 11\r\n")
+
+	assert.Equal(t, "hello-world", bodyOf(out))
+}
+
+func TestWritePartialContentResponse_RangeStartOnly_Returns206AndFullToEOF(t *testing.T) {
+	content := []byte("0123456789") // 10 bytes
+	req := mkReq("GET", "/video")
+	req.Headers.Set("Range", "bytes=0-")
+
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+
+	rs := bytes.NewReader(content)
+	err := w.WritePartialContentResponse(rs, len(content), "video/mp4", req)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Equal(t, "HTTP/1.1 206 Partial Content\r\n", statusLineOf(out))
+
+	hb := headerBlock(out)
+	assert.Contains(t, hb, "content-type: video/mp4\r\n")
+	assert.Contains(t, hb, "accept-ranges: bytes\r\n")
+	assert.Contains(t, hb, "content-range: bytes 0-9/10\r\n")
+	assert.Contains(t, hb, "content-length: 10\r\n")
+
+	assert.Equal(t, "0123456789", bodyOf(out))
+}
+
+func TestWritePartialContentResponse_RangeStartEnd_Returns206Subset(t *testing.T) {
+	content := []byte("abcdefghijklmnopqrstuvwxyz") // 26 bytes
+	req := mkReq("GET", "/video")
+	req.Headers.Set("Range", "bytes=2-5")
+
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+
+	rs := bytes.NewReader(content)
+	err := w.WritePartialContentResponse(rs, len(content), "video/mp4", req)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Equal(t, "HTTP/1.1 206 Partial Content\r\n", statusLineOf(out))
+
+	hb := headerBlock(out)
+	assert.Contains(t, hb, "content-range: bytes 2-5/26\r\n")
+	assert.Contains(t, hb, "content-length: 4\r\n")
+
+	assert.Equal(t, "cdef", bodyOf(out))
+}
+
+func TestWritePartialContentResponse_RangeEndClamped_Returns206Clamped(t *testing.T) {
+	content := []byte("abcdefghij") // 10 bytes
+	req := mkReq("GET", "/video")
+	req.Headers.Set("Range", "bytes=7-999")
+
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+
+	rs := bytes.NewReader(content)
+	err := w.WritePartialContentResponse(rs, len(content), "video/mp4", req)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Equal(t, "HTTP/1.1 206 Partial Content\r\n", statusLineOf(out))
+
+	hb := headerBlock(out)
+	assert.Contains(t, hb, "content-range: bytes 7-9/10\r\n")
+	assert.Contains(t, hb, "content-length: 3\r\n")
+
+	assert.Equal(t, "hij", bodyOf(out))
+}
+
+func TestWritePartialContentResponse_InvalidRange_Returns400(t *testing.T) {
+	content := []byte("abcdefghij") // 10 bytes
+	req := mkReq("GET", "/video")
+	req.Headers.Set("Range", "bytes=-10")
+
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+
+	rs := bytes.NewReader(content)
+	err := w.WritePartialContentResponse(rs, len(content), "video/mp4", req)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Equal(t, "HTTP/1.1 400 Bad Request\r\n", statusLineOf(out))
+
+	hb := headerBlock(out)
+	assert.Contains(t, hb, "content-type: text/plain\r\n")
+	assert.Contains(t, hb, "content-length: 13\r\n")
+	assert.Equal(t, "invalid range", bodyOf(out))
+}
+
+func TestWritePartialContentResponse_UnsatisfiableStart_Returns416(t *testing.T) {
+	content := []byte("abcdefghij") // 10 bytes
+	req := mkReq("GET", "/video")
+	req.Headers.Set("Range", "bytes=10-") // start == size => out of bounds
+
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+
+	rs := bytes.NewReader(content)
+	err := w.WritePartialContentResponse(rs, len(content), "video/mp4", req)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Equal(t, "HTTP/1.1 416 Range Not Satisfiable\r\n", statusLineOf(out))
+
+	hb := headerBlock(out)
+	assert.Contains(t, hb, "content-type: text/plain\r\n")
+	assert.Contains(t, hb, "content-range: bytes */10\r\n")
+	assert.Contains(t, hb, "content-length: 22\r\n") // len("invalid range provided")
+	assert.Equal(t, "invalid range provided", bodyOf(out))
+}
+
+func TestWritePartialContentResponse_UnsatisfiableEndLtStart_Returns416(t *testing.T) {
+	content := []byte("abcdefghij") // 10 bytes
+	req := mkReq("GET", "/video")
+	req.Headers.Set("Range", "bytes=7-3")
+
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+
+	rs := bytes.NewReader(content)
+	err := w.WritePartialContentResponse(rs, len(content), "video/mp4", req)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Equal(t, "HTTP/1.1 416 Range Not Satisfiable\r\n", statusLineOf(out))
+
+	hb := headerBlock(out)
+	assert.Contains(t, hb, "content-range: bytes */10\r\n")
+	assert.Equal(t, "invalid range provided", bodyOf(out))
+}
+
+func TestWritePartialContentResponse_ReadAllError_Returns500(t *testing.T) {
+	req := mkReq("GET", "/video")
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+
+	err := w.WritePartialContentResponse(badReadSeeker{}, 10, "video/mp4", req)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Equal(t, "HTTP/1.1 500 Internal Server Error\r\n", statusLineOf(out))
+	assert.Contains(t, headerBlock(out), "content-type: text/plain\r\n")
+	assert.Equal(t, "error loading content", bodyOf(out))
+}
+
+func TestWritePartialContentResponse_LoadRangeSeekError_Returns500(t *testing.T) {
+	req := mkReq("GET", "/video")
+	req.Headers.Set("Range", "bytes=0-")
+
+	var buf bytes.Buffer
+	w := NewWriter(&buf)
+
+	rs := &badSeek{data: []byte("abcdefghij")} // 10 bytes
+	err := w.WritePartialContentResponse(rs, 10, "video/mp4", req)
+	require.NoError(t, err)
+
+	out := buf.String()
+	assert.Equal(t, "HTTP/1.1 500 Internal Server Error\r\n", statusLineOf(out))
+	assert.Equal(t, "error loading range", bodyOf(out))
+}
+
 func TestGetDefaultHeaders(t *testing.T) {
 	h := GetDefaultHeaders(123)
 	v, ok := h.Get("Content-Length")
@@ -262,4 +508,73 @@ func TestGetDefaultHeaders(t *testing.T) {
 	v, ok = h.Get("Content-Type")
 	require.True(t, ok)
 	assert.Equal(t, "text/html", v)
+}
+
+func TestParseRange(t *testing.T) {
+	start, end, endProvided, ok := parseRange("bytes=0-")
+	assert.True(t, ok)
+	assert.Equal(t, 0, start)
+	assert.Equal(t, 0, end)
+	assert.False(t, endProvided)
+
+	start, end, endProvided, ok = parseRange("bytes=5-10")
+	assert.True(t, ok)
+	assert.Equal(t, 5, start)
+	assert.Equal(t, 10, end)
+	assert.True(t, endProvided)
+
+	_, _, _, ok = parseRange("bytes=-10")
+	assert.False(t, ok)
+
+	_, _, _, ok = parseRange("bytes=abc-10")
+	assert.False(t, ok)
+
+	_, _, _, ok = parseRange("nope=0-10")
+	assert.False(t, ok)
+
+	_, _, _, ok = parseRange("bytes=1") // missing '-'
+	assert.False(t, ok)
+}
+
+func TestLoadRange(t *testing.T) {
+	content := []byte("abcdefghijklmnopqrstuvwxyz") // 26 bytes
+	rs := bytes.NewReader(content)
+
+	// bytes=0- (no end provided) => 0..25
+	body, usedEnd, err := loadRange(rs, len(content), 0, 0, false)
+	require.NoError(t, err)
+	assert.Equal(t, 25, usedEnd)
+	assert.Equal(t, string(content), string(body))
+
+	// bytes=2-5 => "cdef"
+	rs = bytes.NewReader(content)
+	body, usedEnd, err = loadRange(rs, len(content), 2, 5, true)
+	require.NoError(t, err)
+	assert.Equal(t, 5, usedEnd)
+	assert.Equal(t, "cdef", string(body))
+
+	// clamp end: bytes=20-999 => 20..25
+	rs = bytes.NewReader(content)
+	body, usedEnd, err = loadRange(rs, len(content), 20, 999, true)
+	require.NoError(t, err)
+	assert.Equal(t, 25, usedEnd)
+	assert.Equal(t, "uvwxyz", string(body))
+
+	// start out of bounds
+	rs = bytes.NewReader(content)
+	_, _, err = loadRange(rs, len(content), 26, 0, false)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrRangeOutOfBounds)
+
+	// end < start
+	rs = bytes.NewReader(content)
+	_, _, err = loadRange(rs, len(content), 10, 5, true)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrRangeEndLtStart)
+
+	// contentSize <= 0
+	rs = bytes.NewReader(content)
+	_, _, err = loadRange(rs, 0, 0, 0, false)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrRangeOutOfBounds)
 }

@@ -302,7 +302,6 @@ func RequestFromReader(reader io.Reader) (*Request, error) {
 	bufLen := 0
 	for !request.done() {
 		n, err := reader.Read(buf[bufLen:])
-		// TODO: what should we do here?
 		if err != nil {
 			return nil, err
 		}
