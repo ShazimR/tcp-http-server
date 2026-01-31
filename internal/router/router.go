@@ -34,9 +34,6 @@ type routerNode struct {
 }
 
 func newRouterNode(token string, isParam bool) *routerNode {
-	if isParam {
-		token = token[1:]
-	}
 	return &routerNode{
 		token:    token,
 		isParam:  isParam,
@@ -134,13 +131,11 @@ func (r *Router) addRoute(tokens []string, m method, handler response.Handler) e
 		if isParam {
 			node = runner.getParamChild()
 			if node == nil {
-				node = newRouterNode(token, true)
+				node = newRouterNode(token[1:], true)
 				runner.addChild(node)
 
-			} else {
-				if node.token != token[1:] {
-					return ErrAmbiguousPathParams
-				}
+			} else if node.token != token[1:] {
+				return ErrAmbiguousPathParams
 			}
 
 		} else {

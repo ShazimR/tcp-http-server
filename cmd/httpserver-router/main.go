@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"syscall"
 
 	"github.com/ShazimR/tcp-http-server/internal/request"
@@ -25,91 +24,6 @@ const maxChunkSize = 32 * KiB
 type TestResponse struct {
 	Message   string `json:"msg"`
 	Timestamp uint64 `json:"ts"`
-}
-
-var (
-	ErrRangeOutOfBounds = fmt.Errorf("range start out of bounds")
-	ErrRangeEndLtStart  = fmt.Errorf("range end < start")
-)
-
-func parseRange(s string) (start int, end int, endprovided bool, ok bool) {
-	prefix := "bytes="
-	if !strings.HasPrefix(s, prefix) {
-		return 0, 0, false, false
-	}
-
-	rangeStr := strings.TrimPrefix(s, prefix)
-	parts := strings.SplitN(rangeStr, "-", 2)
-	if len(parts) != 2 {
-		return 0, 0, false, false
-	}
-
-	if parts[0] == "" {
-		return 0, 0, false, false
-	}
-
-	st, err := strconv.Atoi(parts[0])
-	if err != nil {
-		return 0, 0, false, false
-	}
-
-	if parts[1] == "" {
-		return st, 0, false, true
-	}
-
-	en, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return 0, 0, false, false
-	}
-
-	return st, en, true, true
-}
-
-func loadRange(filename string, start int, end int, endProvided bool) (filessize int, body []byte, usedEnd int, err error) {
-	f, err := os.Open(filename)
-	if err != nil {
-		return 0, nil, 0, err
-	}
-	defer f.Close()
-
-	info, err := f.Stat()
-	if err != nil {
-		return 0, nil, 0, err
-	}
-
-	size64 := info.Size()
-	if size64 <= 0 {
-		return int(size64), nil, -1, ErrRangeOutOfBounds
-	}
-	size := int(size64)
-
-	if start >= size {
-		return size, nil, 0, ErrRangeOutOfBounds
-	}
-
-	if !endProvided {
-		end = size - 1
-	} else {
-		if end < start {
-			return size, nil, 0, ErrRangeEndLtStart
-		}
-		if end >= size {
-			end = size - 1 // clamp
-		}
-	}
-
-	n := (end - start) + 1
-
-	if _, err := f.Seek(int64(start), io.SeekStart); err != nil {
-		return size, nil, 0, err
-	}
-
-	buf := make([]byte, n)
-	if _, err := io.ReadFull(f, buf); err != nil {
-		return size, nil, 0, err
-	}
-
-	return size, buf, end, nil
 }
 
 func parseDemoBody(req *request.Request) string {
@@ -145,38 +59,30 @@ func serveStatic(filename string, contentType string, req *request.Request, w *r
 
 	h := response.GetDefaultHeaders(0)
 	h.Replace("Content-Type", contentType)
-	h.Set("Accept-Ranges", "bytes")
 
-	if rangeStr, ok := req.Headers.Get("Range"); ok {
-		start, end, endProvided, ok := parseRange(rangeStr)
-		if !ok {
-			body := []byte("invalid range")
-			h.Replace("Content-Type", "text/plain")
-			h.Replace("Content-Length", strconv.Itoa(len(body)))
-			return w.WriteResponse(response.StatusBadRequest, h, body)
-		}
+	f, err := os.Open(filename)
+	if err != nil {
+		body := []byte("error loading content")
+		h.Replace("Content-Type", "text/plain")
+		h.Replace("Content-Length", strconv.Itoa(len(body)))
+		return w.WriteResponse(response.StatusInternalServerError, h, body)
+	}
+	defer f.Close()
 
-		fileSize, body, usedEnd, err := loadRange(filename, start, end, endProvided)
-		if errors.Is(err, ErrRangeEndLtStart) || errors.Is(err, ErrRangeOutOfBounds) {
-			body = []byte("invalid range provided")
-			h.Replace("Content-Type", "text/plain")
-			h.Replace("Content-Length", strconv.Itoa(len(body)))
-			h.Set("Content-Range", fmt.Sprintf("bytes */%d", fileSize))
-			return w.WriteResponse(response.StatusRangeNotSatisfiable, h, body)
-		}
+	if _, ok := req.Headers.Get("Range"); ok {
+		info, err := f.Stat()
 		if err != nil {
-			body = []byte("error loading range")
+			body := []byte("error loading content")
 			h.Replace("Content-Type", "text/plain")
 			h.Replace("Content-Length", strconv.Itoa(len(body)))
 			return w.WriteResponse(response.StatusInternalServerError, h, body)
 		}
 
-		h.Replace("Content-Length", strconv.Itoa(len(body)))
-		h.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, usedEnd, fileSize))
-		return w.WriteResponse(response.StatusPartialContent, h, body)
+		filesize := int(info.Size())
+		return w.WritePartialContentResponse(f, filesize, contentType, req)
 	}
 
-	body, err := os.ReadFile(filename)
+	body, err := io.ReadAll(f)
 	if err != nil {
 		body = []byte("error loading file")
 		h.Replace("Content-Type", "text/plain")
