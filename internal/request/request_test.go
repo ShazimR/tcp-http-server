@@ -190,6 +190,81 @@ func TestParseBody(t *testing.T) {
 	require.NotNil(t, r)
 	assert.Equal(t, "Hello World!\n", string(r.Body))
 
+	// Test: Chunk encoded with CRLF in body
+	reader = &chunkReader{
+		data: "POST /submit HTTP/1.1\r\n" +
+			"Host: localhost:8080\r\n" +
+			"Transfer-Encoding: chunked\r\n" +
+			"\r\n" +
+			"3\r\n" +
+			"Hel\r\n" +
+			"2\r\n" +
+			"lo\r\n" +
+			"2\r\n" +
+			"\r\n\r\n" + // crlf in body here
+			"1\r\n" +
+			"W\r\n" +
+			"4\r\n" +
+			"orld\r\n" +
+			"3\r\n" +
+			"!\r\n\r\n" + // crlf in body here
+			"0\r\n" +
+			"\r\n",
+		numBytesPerRead: 1,
+	}
+	r, err = RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	assert.Equal(t, "Hello\r\nWorld!\r\n", string(r.Body))
+
+	// Test: Chunk encoded with missing CRLF at end of chunk
+	reader = &chunkReader{
+		data: "POST /submit HTTP/1.1\r\n" +
+			"Host: localhost:8080\r\n" +
+			"Transfer-Encoding: chunked\r\n" +
+			"\r\n" +
+			"3\r\n" +
+			"Hel\r\n" +
+			"2\r\n" +
+			"lo\r\n" +
+			"2\r\n" +
+			" W\r\n" +
+			"4\r\n" +
+			"orld" + // missing crlf here
+			"3\r\n" +
+			"!\r\n" +
+			"0\r\n" +
+			"\r\n",
+		numBytesPerRead: 1,
+	}
+	r, err = RequestFromReader(reader)
+	require.Error(t, err)
+	assert.Equal(t, ErrMalformedChunkedBody, err)
+
+	// Test: Chunk encoded chunk size not valid
+	reader = &chunkReader{
+		data: "POST /submit HTTP/1.1\r\n" +
+			"Host: localhost:8080\r\n" +
+			"Transfer-Encoding: chunked\r\n" +
+			"\r\n" +
+			"3\r\n" +
+			"Hel\r\n" +
+			"2\r\n" +
+			"lo\r\n" +
+			"2\r\n" +
+			" W\r\n" +
+			"4" + // missing crlf causes invalid size -> "4orld\r\n"
+			"orld\r\n" +
+			"3\r\n" +
+			"!\r\n" +
+			"0\r\n" +
+			"\r\n",
+		numBytesPerRead: 1,
+	}
+	r, err = RequestFromReader(reader)
+	require.Error(t, err)
+	assert.Equal(t, ErrMalformedChunkedBody, err)
+
 	// Test: Body shorter than reported content length
 	reader = &chunkReader{
 		data: "POST /submit HTTP/1.1\r\n" +

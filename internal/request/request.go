@@ -29,12 +29,14 @@ type Request struct {
 	RequestParams map[string]string
 	PathParams    map[string]string
 	state         parserState
+	chunkLength   int
 }
 
 var (
 	ErrMalformedRequestLine = fmt.Errorf("malformed request-line")
 	ErrUnsupportedVersion   = fmt.Errorf("unsupported http version")
 	ErrReqInErrState        = fmt.Errorf("request in error state")
+	ErrMalformedChunkedBody = fmt.Errorf("malformed chunked body")
 )
 
 type parserState int
@@ -67,6 +69,7 @@ func getInt(headers *headers.Headers, name string, defaultValue int) int {
 func newRequest() *Request {
 	return &Request{
 		state:         StateInit,
+		chunkLength:   0,
 		Headers:       headers.NewHeaders(),
 		Body:          []byte{},
 		Trailer:       headers.NewHeaders(),
@@ -170,10 +173,15 @@ outer:
 
 			} else {
 				r.state = StateChunkData
+				r.chunkLength = l
 			}
 
 		case StateChunkData:
-			n := parseChunkData(currentData, r)
+			n, err := parseChunkData(currentData, r)
+			if err != nil {
+				r.state = StateError
+				return 0, err
+			}
 			if n == 0 {
 				break outer
 			}
@@ -240,7 +248,7 @@ func parseRequestLine(b []byte) (*RequestLine, int, error) {
 	return requestLine, read, nil
 }
 
-func parseChunkLength(b []byte) (int, int, error) {
+func parseChunkLength(b []byte) (readSize int, chunkLength int, e error) {
 	idx := bytes.Index(b, sepCRLF)
 	if idx == -1 {
 		return 0, -1, nil // not enough data yet
@@ -250,23 +258,28 @@ func parseChunkLength(b []byte) (int, int, error) {
 	read := idx + len(sepCRLF)
 	length, err := strconv.ParseUint(string(lenHexStr), 16, 64)
 	if err != nil {
-		return 0, -1, err
+		return 0, -1, ErrMalformedChunkedBody
 	}
 
 	return read, int(length), nil
 }
 
-func parseChunkData(b []byte, r *Request) int {
-	idx := bytes.Index(b, sepCRLF)
-	if idx == -1 {
-		return 0 // not enough data yet
+func parseChunkData(b []byte, r *Request) (int, error) {
+	if len(b) < r.chunkLength+len(sepCRLF) {
+		return 0, nil // not enough data yet
 	}
 
-	data := b[:idx]
-	read := idx + len(sepCRLF)
-	r.Body = append(r.Body, data...)
+	if idx := bytes.Index(b, sepCRLF); idx == -1 {
+		return 0, ErrMalformedChunkedBody // no CRLF at end of chunk
+	}
+	if !bytes.HasSuffix(b[:r.chunkLength+len(sepCRLF)], sepCRLF) {
+		return 0, ErrMalformedChunkedBody // CRLF not at end of chunk
+	}
 
-	return read
+	r.Body = append(r.Body, b[:r.chunkLength]...)
+	read := r.chunkLength + len(sepCRLF)
+
+	return read, nil
 }
 
 func parseRequestParameters(r *Request) error {
