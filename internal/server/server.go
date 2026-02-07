@@ -41,7 +41,8 @@ func (s *Server) handle(conn io.ReadWriteCloser) {
 	if errors.Is(err, request.ErrMalformedRequestLine) ||
 		errors.Is(err, headers.ErrMalformedFieldLine) ||
 		errors.Is(err, headers.ErrMalformedHeader) ||
-		errors.Is(err, headers.ErrMalformedHeaderName) {
+		errors.Is(err, headers.ErrMalformedHeaderName) ||
+		errors.Is(err, request.ErrMalformedChunkedBody) {
 		body := []byte(err.Error())
 		h := response.GetDefaultHeaders(len(body))
 		_ = responseWriter.WriteResponse(response.StatusBadRequest, h, body)
