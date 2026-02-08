@@ -19,6 +19,27 @@
 
     <main class="container grid">
       <section class="card">
+        <h2>Login</h2>
+
+        <label class="label">Username</label>
+        <input id="loginUsername" class="input" placeholder="shazimr" />
+
+        <label class="label">Password</label>
+        <input
+          id="loginPassword"
+          class="input"
+          type="password"
+          placeholder="password123"
+        />
+
+        <div class="row wrap gap-top">
+          <button id="loginBtn" class="btn">POST /login</button>
+        </div>
+      
+        <pre id="loginStatus" class="output" style="margin-top:12px;"></pre>
+      </section>
+
+      <section class="card">
         <h2>Request</h2>
 
         <label class="label" for="path">Base Path</label>
@@ -103,6 +124,27 @@ justflag
       </section>
 
       <section class="card">
+        <h2>Request Preview</h2>
+        <p class="small muted">
+          Note: browsers add headers we can't read back (Host, User-Agent, etc.). This preview shows what our JS constructs.
+        </p>
+        <pre id="rawRequest" class="output"></pre>
+      </section>
+
+      <section class="card">
+        <h2>Response</h2>
+
+        <div class="row wrap">
+          <button id="rootCheck" class="btn secondary" type="button">GET /</button>
+          <button id="indexCheck" class="btn secondary" type="button">GET /index.html</button>
+          <button id="cssCheck" class="btn secondary" type="button">GET /styles.css</button>
+          <button id="jsCheck" class="btn secondary" type="button">GET /app.js</button>
+        </div>
+
+        <pre id="output" class="output"></pre>
+      </section>
+
+      <section class="card">
         <h2>MP4 Test</h2>
         <p class="small muted">
           Click to fetch and play the MP4 (served as <code>Content-Length</code>).
@@ -150,27 +192,6 @@ justflag
           class="output"
           style="margin-top:12px; height: 18vh; max-height: 18vh;"
         ></pre>
-      </section>
-
-      <section class="card">
-        <h2>Request Preview</h2>
-        <p class="small muted">
-          Note: browsers add headers we can't read back (Host, User-Agent, etc.). This preview shows what our JS constructs.
-        </p>
-        <pre id="rawRequest" class="output"></pre>
-      </section>
-
-      <section class="card">
-        <h2>Response</h2>
-
-        <div class="row wrap">
-          <button id="rootCheck" class="btn secondary" type="button">GET /</button>
-          <button id="indexCheck" class="btn secondary" type="button">GET /index.html</button>
-          <button id="cssCheck" class="btn secondary" type="button">GET /styles.css</button>
-          <button id="jsCheck" class="btn secondary" type="button">GET /app.js</button>
-        </div>
-
-        <pre id="output" class="output"></pre>
       </section>
     </main>
 

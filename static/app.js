@@ -181,6 +181,52 @@
             elBody.value = JSON.stringify({ msg: "hello router", ts: Date.now() }, null, 2);
         }
 
+        // --- Login ---
+        const loginBtn = $("loginBtn");
+        const loginStatus = $("loginStatus");
+
+        loginBtn?.addEventListener("click", async () => {
+            const username = safeTrim($("loginUsername")?.value);
+            const password = safeTrim($("loginPassword")?.value);
+
+            if (!username || !password) {
+                loginStatus.textContent = "Username and password required.";
+                return;
+            }
+
+            const bodyObj = { username, password };
+            const bodyText = JSON.stringify(bodyObj, null, 2);
+
+            const url = "/login";
+
+            // Preview request
+            setText(
+                "rawRequest",
+                buildRawRequestPreview("POST", url, bodyText)
+            );
+
+            loginStatus.textContent = `→ POST ${url}\n\n`;
+
+            try {
+                const res = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: bodyText,
+                });
+
+                const text = await res.text();
+                const cookies = document.cookie == "" ? "empty" : document.cookie;
+
+                loginStatus.textContent +=
+                    `Status: ${res.status}\n` +
+                    `Cookie Jar: ${cookies}\n\n` +
+                    `Body:\n${text}\n`;
+
+            } catch (e) {
+                loginStatus.textContent += `Fetch error: ${e}\n`;
+            }
+        });
+
         // --- Main request card buttons (GET/POST/PUT/DELETE/PATCH) ---
         document.querySelectorAll("button[data-method]").forEach((btn) => {
             btn.addEventListener("click", () => {
