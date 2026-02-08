@@ -18,6 +18,7 @@ const (
 	StatusCreated                 StatusCode = 201
 	StatusPartialContent          StatusCode = 206
 	StatusBadRequest              StatusCode = 400
+	StatusUnauthorized            StatusCode = 401
 	StatusNotFound                StatusCode = 404
 	StatusMethodNotAllowed        StatusCode = 405
 	StatusRangeNotSatisfiable     StatusCode = 416
@@ -54,6 +55,8 @@ func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 		statusLine = []byte("HTTP/1.1 206 Partial Content\r\n")
 	case StatusBadRequest:
 		statusLine = []byte("HTTP/1.1 400 Bad Request\r\n")
+	case StatusUnauthorized:
+		statusLine = []byte("HTTP/1.1 401 Unauthorized\r\n")
 	case StatusNotFound:
 		statusLine = []byte("HTTP/1.1 404 Not Found\r\n")
 	case StatusMethodNotAllowed:

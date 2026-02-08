@@ -20,10 +20,16 @@ import (
 const port = 8080
 const KiB = 1024 // bytes
 const maxChunkSize = 32 * KiB
+const testAuthKey = "some-key-for-now"
 
 type TestResponse struct {
 	Message   string `json:"msg"`
 	Timestamp uint64 `json:"ts"`
+}
+
+type LoginResponse struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 func parseDemoBody(req *request.Request) string {
@@ -34,29 +40,7 @@ func parseDemoBody(req *request.Request) string {
 	return fmt.Sprintf("msg: %s | ts: %d", reqBody.Message, reqBody.Timestamp)
 }
 
-func logReq(req *request.Request, extraPrint func()) {
-	method := req.RequestLine.Method
-	path := req.RequestLine.RequestTarget
-	bodyStr := parseDemoBody(req)
-	headerStr := ""
-	req.Headers.ForEach(func(name, value string) {
-		headerStr += fmt.Sprintf("  - %s: %s\n", name, value)
-	})
-
-	fmt.Printf("Method:      %s\n", method)
-	fmt.Printf("Path:        %s\n", path)
-	if extraPrint != nil {
-		extraPrint()
-	}
-	fmt.Printf("QueryParams: %s\n", req.RequestParams)
-	fmt.Printf("Headers:\n%s", headerStr)
-	fmt.Printf("Body:        %s\n", bodyStr)
-	fmt.Printf("Raw:         %s\n\n", req.Body)
-}
-
 func serveStatic(filename string, contentType string, req *request.Request, w *response.Writer) error {
-	logReq(req, nil)
-
 	h := response.GetDefaultHeaders(0)
 	h.Replace("Content-Type", contentType)
 
@@ -161,13 +145,10 @@ func serveVideo(w *response.Writer, req *request.Request) error {
 }
 
 func serveVideoChunked(w *response.Writer, req *request.Request) error {
-	logReq(req, nil)
 	return serveChunked("./static/one-last-breath.mp4", "video/mp4", w)
 }
 
 func echo(w *response.Writer, req *request.Request) error {
-	logReq(req, nil)
-
 	status := response.StatusOK
 	h := response.GetDefaultHeaders(0)
 	h.Replace("Content-Type", "application/json")
@@ -196,8 +177,6 @@ func echo(w *response.Writer, req *request.Request) error {
 
 // Echo that also includes path params in the response
 func echoParams(w *response.Writer, req *request.Request) error {
-	logReq(req, func() { fmt.Printf("PathParams:  %s\n", req.PathParams) })
-
 	status := response.StatusOK
 	h := response.GetDefaultHeaders(0)
 	h.Replace("Content-Type", "application/json")
@@ -225,10 +204,71 @@ func echoParams(w *response.Writer, req *request.Request) error {
 	return w.WriteResponse(status, h, resBody)
 }
 
+func login(w *response.Writer, req *request.Request) error {
+	var reqBody LoginResponse
+	if err := json.Unmarshal(req.Body, &reqBody); err != nil {
+		body := []byte("body must include 'username' and 'password' keys")
+		h := response.GetDefaultHeaders(len(body))
+		h.Replace("Content-Type", "text/plain")
+		return w.WriteResponse(response.StatusBadRequest, h, body)
+	}
+
+	const testUsername = "shazimr"
+	const testPassword = "password123"
+
+	if reqBody.Username != testUsername || reqBody.Password != testPassword {
+		body := []byte("username or password is incorrect (username is 'shazimr' and password is 'password123')")
+		h := response.GetDefaultHeaders(len(body))
+		h.Replace("Content-Type", "text/plain")
+		return w.WriteResponse(response.StatusUnauthorized, h, body)
+	}
+
+	h := response.GetDefaultHeaders(0)
+	maxAge := 120 // seconds
+	h.Set("Set-Cookie", fmt.Sprintf("Authentication=%s; Max-Age=%d", testAuthKey, maxAge))
+	return w.WriteResponse(response.StatusOK, h, []byte{})
+}
+
+func logger(next response.Handler) response.Handler {
+	return func(w *response.Writer, req *request.Request) error {
+		method := req.RequestLine.Method
+		path := req.RequestLine.RequestTarget
+		headerStr := ""
+		req.Headers.ForEach(func(name, value string) {
+			headerStr += fmt.Sprintf("  - %s: %s\n", name, value)
+		})
+
+		fmt.Printf("Method:      %s\n", method)
+		fmt.Printf("Path:        %s\n", path)
+		fmt.Printf("PathParams:  %s\n", req.PathParams)
+		fmt.Printf("QueryParams: %s\n", req.RequestParams)
+		fmt.Printf("Headers:\n%s", headerStr)
+		fmt.Printf("Body:\n%s\n\n", req.Body)
+
+		return next(w, req)
+	}
+}
+
+func auth(next response.Handler) response.Handler {
+	return func(w *response.Writer, req *request.Request) error {
+		if cookie, ok := req.Headers.Get("Cookie"); ok && cookie == fmt.Sprintf("Authentication=%s", testAuthKey) {
+			return next(w, req)
+
+		} else {
+			body := []byte("please login to access")
+			h := response.GetDefaultHeaders(len(body))
+			h.Replace("Content-Type", "text/plain")
+			return w.WriteResponse(response.StatusUnauthorized, h, body)
+		}
+	}
+}
+
 func main() {
 	// Routers
 	r := router.NewRouter()
+	r.Use(logger)
 	api := r.Group("/api")
+	api.Use(auth)
 	echoRouter := api.Group("/echo")
 	userPosts := api.Group("/users/:userid/posts/:postid")
 
@@ -240,6 +280,9 @@ func main() {
 	r.GET("/app.js", serveApp)
 	r.GET("/video", serveVideo)
 	r.GET("/video-chunked", serveVideoChunked)
+
+	// Auth routes
+	r.POST("/login", login)
 
 	// Base echo (no path params needed)
 	// Example target /api/echo?flag=true&test=a=b

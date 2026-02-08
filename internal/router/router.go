@@ -95,16 +95,20 @@ func (node *routerNode) getHandler(m method) (response.Handler, error) {
 	return node.handlers[m], nil
 }
 
+type Middleware func(next response.Handler) response.Handler
+
 type Router struct {
-	routes *routerNode
-	prefix string
+	routes     *routerNode
+	prefix     string
+	middleware []Middleware
 }
 
 func NewRouter() *Router {
 	head := newRouterNode("/", false)
 	return &Router{
-		routes: head,
-		prefix: "",
+		routes:     head,
+		prefix:     "",
+		middleware: []Middleware{},
 	}
 }
 
@@ -120,6 +124,16 @@ func (r *Router) withPrefix(path string) (string, error) {
 	}
 
 	return (r.prefix + path), nil
+}
+
+func (r *Router) applyMiddleware(h response.Handler) response.Handler {
+	wrapped := h
+
+	for i := len(r.middleware) - 1; i >= 0; i-- {
+		wrapped = r.middleware[i](wrapped)
+	}
+
+	return wrapped
 }
 
 func (r *Router) addRoute(tokens []string, m method, handler response.Handler) error {
@@ -149,6 +163,7 @@ func (r *Router) addRoute(tokens []string, m method, handler response.Handler) e
 		runner = node
 	}
 
+	handler = r.applyMiddleware(handler)
 	return runner.setMethodHandler(m, handler)
 }
 
@@ -235,9 +250,14 @@ func (r *Router) Group(prefix string) *Router {
 	}
 
 	return &Router{
-		routes: r.routes,
-		prefix: r.prefix + newPrefix,
+		routes:     r.routes,
+		prefix:     r.prefix + newPrefix,
+		middleware: append([]Middleware{}, r.middleware...),
 	}
+}
+
+func (r *Router) Use(mw ...Middleware) {
+	r.middleware = append(r.middleware, mw...)
 }
 
 func (r *Router) GetHandler(req *request.Request) response.Handler {
