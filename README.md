@@ -51,6 +51,9 @@ This project implements a minimal but functional HTTP/1.1 server, including:
 - Method-based routing with path parameters
 - Query parameter parsing
 - Partial content support (`Range`, `206`, `416`)
+- Middleware support
+- Router groups and route prefixing
+- Cookie-based authentication demo
 - Graceful shutdown
 - Unit testing, CI, and Docker support
 
@@ -93,11 +96,26 @@ Two example servers are provided:
 - Method-based routing (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, etc.)
 - Static path matching
 - Path parameters (e.g. `/api/users/:userid/posts/:postid`)
+- Router groups and nested prefixes
+- Middleware chaining (global + group-level)
 - Correct distinction between:
   - `404 Not Found`
   - `405 Method Not Allowed`
 - Populates:
   - `req.PathParams`
+
+### Middleware
+Middleware can be attached globally or to specific router groups.
+
+They execute in a chain before the final handler and have full access to:
+- request
+- response writer
+- headers
+- body
+
+Example uses implemented:
+- Request logging
+- Cookie inspection / authentication demo
 
 ### Static Files
 - Serve HTML, CSS, JavaScript, favicon, and video
@@ -226,16 +244,22 @@ Response:
 
 ## Static Router Tester
 
-A small static website is included and served at `/`:
+A small static website is included and served at `/`.
 
-* Buttons for `GET`, `POST`, `PUT`, `DELETE`, `PATCH`
-* Separate query param inputs
-* Path parameter testing
-* Raw request preview
-* No database
-* Media streaming
-* Intended for demonstration and presentation
-  (debugging is done via `curl`)
+Features:
+- Buttons for `GET`, `POST`, `PUT`, `DELETE`, `PATCH`
+- Query parameter builder
+- Path parameter testing
+- Raw request preview
+- Media streaming tests:
+  - Content-Length video
+  - Chunked video
+- Login form that sends credentials to `/login`
+- Cookie visibility after authentication
+- No database (auth is demo-only)
+
+Intended for demonstration and presentation  
+(debugging is done via `curl`/`postman`).
 
 
 ## Docker
@@ -305,6 +329,29 @@ The router tracks all handlers registered at a path.
 If a path exists but the method does not, the server returns **`405 Method Not Allowed`** instead of `404`.
 
 This mirrors real HTTP server behavior and avoids a common correctness bug in simple routers.
+
+### Middleware implemented as handler chaining
+
+Middleware follows a functional chaining model:
+
+```
+mw1(mw2(handler))
+```
+
+Each middleware receives the request and response writer and decides whether to:
+
+- continue the chain
+- modify the request/response
+- terminate early
+
+This mirrors production server behavior while remaining lightweight and explicit.
+
+Middleware can be attached:
+
+- globally on the root router
+- per group (prefix-scoped)
+
+This enables layered concerns such as logging and authentication.
 
 ### Chunked encoding implemented end-to-end
 
@@ -412,8 +459,6 @@ This project intentionally does **not** implement:
 ## Future Work
 
 * Persistent connections (`keep-alive`)
-* Middleware support
-* Router groups and path prefixes
 * Request body streaming (avoid full buffering)
 * Automatic `OPTIONS` + `Allow`
 * Compression
