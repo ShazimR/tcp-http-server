@@ -27,6 +27,27 @@ const (
 	StatusHttpVersionNotSupported StatusCode = 505
 )
 
+var statusText = map[StatusCode]string{
+	StatusOK:                      "OK",
+	StatusCreated:                 "Created",
+	StatusPartialContent:          "Partial Content",
+	StatusBadRequest:              "Bad Request",
+	StatusUnauthorized:            "Unauthorized",
+	StatusNotFound:                "Not Found",
+	StatusMethodNotAllowed:        "Method Not Allowed",
+	StatusRangeNotSatisfiable:     "Range Not Satisfiable",
+	StatusInternalServerError:     "Internal Server Error",
+	StatusNotImplemented:          "Not Implemented",
+	StatusHttpVersionNotSupported: "Http Version Not Supported",
+}
+
+func (s StatusCode) String() string {
+	if text, ok := statusText[s]; ok {
+		return text
+	}
+	return ""
+}
+
 var (
 	ErrUnrecognizedStatusCode = fmt.Errorf("unrecognized status code")
 	ErrFailedToWrite          = fmt.Errorf("failed to write")
@@ -45,31 +66,9 @@ func NewWriter(w io.Writer) *Writer {
 }
 
 func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
-	statusLine := []byte{}
-	switch statusCode {
-	case StatusOK:
-		statusLine = []byte("HTTP/1.1 200 OK\r\n")
-	case StatusCreated:
-		statusLine = []byte("HTTP/1.1 201 Created\r\n")
-	case StatusPartialContent:
-		statusLine = []byte("HTTP/1.1 206 Partial Content\r\n")
-	case StatusBadRequest:
-		statusLine = []byte("HTTP/1.1 400 Bad Request\r\n")
-	case StatusUnauthorized:
-		statusLine = []byte("HTTP/1.1 401 Unauthorized\r\n")
-	case StatusNotFound:
-		statusLine = []byte("HTTP/1.1 404 Not Found\r\n")
-	case StatusMethodNotAllowed:
-		statusLine = []byte("HTTP/1.1 405 Method Not Allowed\r\n")
-	case StatusRangeNotSatisfiable:
-		statusLine = []byte("HTTP/1.1 416 Range Not Satisfiable\r\n")
-	case StatusInternalServerError:
-		statusLine = []byte("HTTP/1.1 500 Internal Server Error\r\n")
-	case StatusNotImplemented:
-		statusLine = []byte("HTTP/1.1 501 Not Implemented\r\n")
-	case StatusHttpVersionNotSupported:
-		statusLine = []byte("HTTP/1.1 505 Http Version Not Supported\r\n")
-	default:
+	text := statusCode.String()
+	statusLine := []byte(fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, text))
+	if text == "" {
 		return ErrUnrecognizedStatusCode
 	}
 
