@@ -55,12 +55,14 @@ func parseHeader(fieldLine []byte) (string, string, error) {
 }
 
 type Headers struct {
-	headers map[string]string
+	headers        map[string]string
+	groupedHeaders map[string][]string
 }
 
 func NewHeaders() *Headers {
 	return &Headers{
-		headers: map[string]string{},
+		headers:        map[string]string{},
+		groupedHeaders: map[string][]string{},
 	}
 }
 
@@ -89,9 +91,25 @@ func (h *Headers) Delete(name string) {
 	delete(h.headers, name)
 }
 
+func (h *Headers) GetGrouped(name string) ([]string, bool) {
+	strs, ok := h.groupedHeaders[strings.ToLower(name)]
+	return strs, ok
+}
+
+func (h *Headers) SetGrouped(name string, value string) {
+	name = strings.ToLower(name)
+	h.groupedHeaders[name] = append(h.groupedHeaders[name], value)
+}
+
 func (h *Headers) ForEach(cb func(name, value string)) {
 	for n, v := range h.headers {
 		cb(n, v)
+	}
+
+	for n, vals := range h.groupedHeaders {
+		for _, val := range vals {
+			cb(n, val)
+		}
 	}
 }
 

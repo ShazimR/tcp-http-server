@@ -231,7 +231,7 @@ func SetCookie(h *headers.Headers, key string, value string, args ...string) {
 	for _, arg := range args {
 		fmt.Fprintf(&cookieStr, "; %s", arg)
 	}
-	h.Set("Set-Cookie", cookieStr.String())
+	h.SetGrouped("Set-Cookie", cookieStr.String())
 }
 
 func parseRange(s string) (start int, end int, endprovided bool, ok bool) {

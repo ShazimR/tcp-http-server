@@ -1,6 +1,7 @@
 package headers
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -82,4 +83,59 @@ func TestHeaderParse(t *testing.T) {
 	assert.Equal(t, ErrMalformedHeaderName, err)
 	assert.Equal(t, 0, n)
 	assert.False(t, done)
+}
+
+func TestSetGet(t *testing.T) {
+	h := NewHeaders()
+	require.NotNil(t, h)
+	h.Set("testing1", "value1")
+	h.Set("testing2", "value2")
+
+	val1, ok := h.Get("testing1")
+	assert.True(t, ok)
+	assert.Equal(t, "value1", val1)
+	val2, ok := h.Get("testing2")
+	assert.True(t, ok)
+	assert.Equal(t, "value2", val2)
+	_, ok = h.Get("testing3")
+	assert.False(t, ok)
+}
+
+func TestSetGetGrouped(t *testing.T) {
+	h := NewHeaders()
+	require.NotNil(t, h)
+	h.SetGrouped("testing1", "value1")
+	h.SetGrouped("testing1", "value2")
+	h.SetGrouped("testing2", "value1")
+
+	vals1, ok := h.GetGrouped("testing1")
+	assert.True(t, ok)
+	assert.Equal(t, 2, len(vals1))
+	assert.Equal(t, "value1", vals1[0])
+	assert.Equal(t, "value2", vals1[1])
+
+	vals2, ok := h.GetGrouped("testing2")
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(vals2))
+	assert.Equal(t, "value1", vals2[0])
+
+	_, ok = h.GetGrouped("testing3")
+	assert.False(t, ok)
+}
+
+func TestForEach(t *testing.T) {
+	h := NewHeaders()
+	require.NotNil(t, h)
+	h.Set("testing1", "value1")
+	h.Set("testing2", "value2")
+	h.SetGrouped("testing3", "value1")
+	h.SetGrouped("testing3", "value2")
+
+	out := []string{}
+	h.ForEach(func(name, value string) {
+		out = append(out, fmt.Sprintf("%s: %s", name, value))
+	})
+
+	exp := []string{"testing1: value1", "testing2: value2", "testing3: value1", "testing3: value2"}
+	assert.ElementsMatch(t, exp, out)
 }
