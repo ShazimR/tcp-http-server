@@ -447,7 +447,6 @@ This project intentionally does **not** implement:
 * HTTP/2 or HTTP/3
 * TLS / HTTPS
 * Persistent connections
-* Middleware
 * Full RFC compliance
 
 
