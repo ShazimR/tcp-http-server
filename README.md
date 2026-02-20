@@ -279,11 +279,6 @@ http://localhost:8080
 The Docker image is built as a **static binary** (no shell, minimal attack surface).
 
 
-Love this addition — a **Design Decisions** section really elevates this from “cool project” to “engineer who thinks deeply about systems.”
-
-Below is a **clean, concise, portfolio-ready Design Decisions section** you can drop straight into your README. It explains *why* you did things the way you did, without turning into a blog post.
-
-
 ## Design Decisions
 
 ### Build on raw TCP - not `net/http`
