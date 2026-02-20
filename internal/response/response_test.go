@@ -582,7 +582,11 @@ func TestLoadRange(t *testing.T) {
 func TestSetCookie(t *testing.T) {
 	h := GetDefaultHeaders(0)
 	SetCookie(h, "yummy_cookie", "chocolate", "Max-Age=3600", "Secure", "HttpOnly")
-	cookie, ok := h.Get("Set-Cookie")
+	SetCookie(h, "tasty_cookie", "strawberry", "Max-Age=180", "Secure", "HttpOnly")
+
+	cookies, ok := h.GetGrouped("Set-Cookie")
 	assert.True(t, ok)
-	assert.Equal(t, "yummy_cookie=chocolate; Max-Age=3600; Secure; HttpOnly", cookie)
+	assert.Equal(t, 2, len(cookies))
+	assert.Equal(t, "yummy_cookie=chocolate; Max-Age=3600; Secure; HttpOnly", cookies[0])
+	assert.Equal(t, "tasty_cookie=strawberry; Max-Age=180; Secure; HttpOnly", cookies[1])
 }
