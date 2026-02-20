@@ -225,6 +225,15 @@ func GetDefaultHeaders(contentLen int) *headers.Headers {
 	return h
 }
 
+func SetCookie(h *headers.Headers, key string, value string, args ...string) {
+	var cookieStr strings.Builder
+	cookieStr.WriteString(key + "=" + value)
+	for _, arg := range args {
+		fmt.Fprintf(&cookieStr, "; %s", arg)
+	}
+	h.Set("Set-Cookie", cookieStr.String())
+}
+
 func parseRange(s string) (start int, end int, endprovided bool, ok bool) {
 	prefix := "bytes="
 	if !strings.HasPrefix(s, prefix) {

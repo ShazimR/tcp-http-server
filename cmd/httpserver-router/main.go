@@ -225,7 +225,7 @@ func login(w *response.Writer, req *request.Request) error {
 
 	h := response.GetDefaultHeaders(0)
 	maxAge := 120 // seconds
-	h.Set("Set-Cookie", fmt.Sprintf("Authentication=%s; Max-Age=%d", testAuthKey, maxAge))
+	response.SetCookie(h, "Authentication", testAuthKey, fmt.Sprintf("Max-Age=%d", maxAge), "Samesite=Lax")
 	return w.WriteResponse(response.StatusOK, h, []byte{})
 }
 
@@ -251,7 +251,7 @@ func logger(next response.Handler) response.Handler {
 
 func auth(next response.Handler) response.Handler {
 	return func(w *response.Writer, req *request.Request) error {
-		if cookie, ok := req.Headers.Get("Cookie"); ok && cookie == fmt.Sprintf("Authentication=%s", testAuthKey) {
+		if authKey, ok := req.GetCookie("Authentication"); ok && authKey == testAuthKey {
 			return next(w, req)
 
 		} else {

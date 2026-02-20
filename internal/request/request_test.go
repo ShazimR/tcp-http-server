@@ -348,3 +348,58 @@ func TestParseTrailer(t *testing.T) {
 	assert.False(t, ok)
 	assert.Equal(t, "", anoStr)
 }
+
+func TestCookie(t *testing.T) {
+	// Test: Standard body with cookie header
+	reader := &chunkReader{
+		data: "POST /submit HTTP/1.1\r\n" +
+			"Host: localhost:8080\r\n" +
+			"Content-Length: 13\r\n" +
+			"Cookie: yummy_cookie=chocolate; tasty_cookie=strawberry\r\n" +
+			"\r\n" +
+			"Hello World!\n",
+		numBytesPerRead: 1,
+	}
+	r, err := RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	{
+		cookies := r.Cookie()
+		require.NotNil(t, cookies)
+		yummyCookie, ok := cookies["yummy_cookie"]
+		assert.True(t, ok)
+		assert.Equal(t, "chocolate", yummyCookie)
+		tastyCookie, ok := cookies["tasty_cookie"]
+		assert.True(t, ok)
+		assert.Equal(t, "strawberry", tastyCookie)
+		_, ok = cookies["nonexistent_cookie"]
+		assert.False(t, ok)
+	}
+	{
+		yummyCookie, ok := r.GetCookie("yummy_cookie")
+		assert.True(t, ok)
+		assert.Equal(t, "chocolate", yummyCookie)
+		tastyCookie, ok := r.GetCookie("tasty_cookie")
+		assert.True(t, ok)
+		assert.Equal(t, "strawberry", tastyCookie)
+		_, ok = r.GetCookie("nonexistent_cookie")
+		assert.False(t, ok)
+	}
+
+	// Test: Standard body without cookie header
+	reader = &chunkReader{
+		data: "POST /submit HTTP/1.1\r\n" +
+			"Host: localhost:8080\r\n" +
+			"Content-Length: 13\r\n" +
+			"\r\n" +
+			"Hello World!\n",
+		numBytesPerRead: 1,
+	}
+	r, err = RequestFromReader(reader)
+	require.NoError(t, err)
+	require.NotNil(t, r)
+	cookies := r.Cookie()
+	require.Nil(t, cookies)
+	_, ok := r.GetCookie("yummy_cookie")
+	assert.False(t, ok)
+}

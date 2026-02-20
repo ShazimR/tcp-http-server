@@ -217,6 +217,32 @@ outer:
 	return read, nil
 }
 
+func (r *Request) Cookie() map[string]string {
+	cookieStr, ok := r.Headers.Get("Cookie")
+	if !ok {
+		return nil
+	}
+
+	cookies := strings.Split(cookieStr, ";")
+	res := make(map[string]string)
+
+	for _, cookie := range cookies {
+		cookie = strings.TrimSpace(cookie)
+		cookieParts := strings.Split(cookie, "=")
+		if len(cookieParts) != 2 {
+			continue
+		}
+		res[cookieParts[0]] = cookieParts[1]
+	}
+
+	return res
+}
+
+func (r *Request) GetCookie(key string) (string, bool) {
+	cookie, ok := r.Cookie()[key]
+	return cookie, ok
+}
+
 func parseRequestLine(b []byte) (*RequestLine, int, error) {
 	idx := bytes.Index(b, sepCRLF)
 	if idx == -1 {

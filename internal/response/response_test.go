@@ -578,3 +578,11 @@ func TestLoadRange(t *testing.T) {
 	require.Error(t, err)
 	assert.ErrorIs(t, err, ErrRangeOutOfBounds)
 }
+
+func TestSetCookie(t *testing.T) {
+	h := GetDefaultHeaders(0)
+	SetCookie(h, "yummy_cookie", "chocolate", "Max-Age=3600", "Secure", "HttpOnly")
+	cookie, ok := h.Get("Set-Cookie")
+	assert.True(t, ok)
+	assert.Equal(t, "yummy_cookie=chocolate; Max-Age=3600; Secure; HttpOnly", cookie)
+}
