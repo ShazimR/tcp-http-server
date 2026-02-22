@@ -261,14 +261,16 @@ func parseRequestLine(b []byte) (*RequestLine, int, error) {
 	if len(httpParts) != 2 || string(httpParts[0]) != "HTTP" {
 		return nil, 0, ErrMalformedRequestLine
 	}
-	if string(httpParts[1]) != "1.1" {
+
+	version := string(httpParts[1])
+	if version != "1.0" && version != "1.1" {
 		return nil, 0, ErrUnsupportedVersion
 	}
 
 	requestLine := &RequestLine{
 		Method:        string(parts[0]),
 		RequestTarget: string(parts[1]),
-		HttpVersion:   string(httpParts[1]),
+		HttpVersion:   version,
 	}
 
 	return requestLine, read, nil

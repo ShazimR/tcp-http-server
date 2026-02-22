@@ -111,10 +111,26 @@ func bodyOf(out string) string {
 }
 
 func TestWriteStatusLine(t *testing.T) {
-	// Test: Good status line
+	// Test: Good status line with default HTTP version (1.1)
 	cw := &chunkWriter{maxPerWrite: 3}
 	w := NewWriter(cw)
 	err := w.WriteStatusLine(StatusOK)
+	require.NoError(t, err)
+	assert.Equal(t, "HTTP/1.1 200 OK\r\n", cw.String())
+
+	// Test: Good status line with HTTP 1.0
+	cw = &chunkWriter{maxPerWrite: 3}
+	w = NewWriter(cw)
+	w.SetHttpVersion("1.0")
+	err = w.WriteStatusLine(StatusOK)
+	require.NoError(t, err)
+	assert.Equal(t, "HTTP/1.0 200 OK\r\n", cw.String())
+
+	// Test: Good status line with HTTP 1.1
+	cw = &chunkWriter{maxPerWrite: 3}
+	w = NewWriter(cw)
+	w.SetHttpVersion("1.1")
+	err = w.WriteStatusLine(StatusOK)
 	require.NoError(t, err)
 	assert.Equal(t, "HTTP/1.1 200 OK\r\n", cw.String())
 
@@ -141,7 +157,7 @@ func TestWriteStatusLine(t *testing.T) {
 }
 
 func TestWriteHeaders(t *testing.T) {
-	// Test: Valid headers
+	// Test: Valid headers no forced close
 	cw := &chunkWriter{maxPerWrite: 2}
 	w := NewWriter(cw)
 	h := headers.NewHeaders()
@@ -155,6 +171,23 @@ func TestWriteHeaders(t *testing.T) {
 	assert.Contains(t, out, "host: localhost:8080\r\n")
 	assert.Contains(t, out, "content-type: text/plain\r\n")
 	assert.Contains(t, out, "x-test: abc\r\n")
+
+	// Test: Valid headers with forced close
+	cw = &chunkWriter{maxPerWrite: 2}
+	w = NewWriter(cw)
+	w.ForceCloseConnection()
+	h = headers.NewHeaders()
+	h.Set("Host", "localhost:8080")
+	h.Set("Content-Type", "text/plain")
+	h.Set("X-Test", "abc")
+	err = w.WriteHeaders(h)
+	require.NoError(t, err)
+	out = cw.String()
+	assert.True(t, strings.HasSuffix(out, "\r\n\r\n"))
+	assert.Contains(t, out, "host: localhost:8080\r\n")
+	assert.Contains(t, out, "content-type: text/plain\r\n")
+	assert.Contains(t, out, "x-test: abc\r\n")
+	assert.Contains(t, out, "connection: close\r\n")
 
 	// Test: Underlying writer error
 	ew := &errWriter{failAfter: 0}
@@ -504,7 +537,7 @@ func TestGetDefaultHeaders(t *testing.T) {
 	assert.Equal(t, "123", v)
 	v, ok = h.Get("Connection")
 	require.True(t, ok)
-	assert.Equal(t, "close", v)
+	assert.Equal(t, "keep-alive", v)
 	v, ok = h.Get("Content-Type")
 	require.True(t, ok)
 	assert.Equal(t, "text/html", v)

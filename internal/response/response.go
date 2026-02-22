@@ -21,6 +21,7 @@ const (
 	StatusUnauthorized            StatusCode = 401
 	StatusNotFound                StatusCode = 404
 	StatusMethodNotAllowed        StatusCode = 405
+	StatusRequestTimeout          StatusCode = 408
 	StatusRangeNotSatisfiable     StatusCode = 416
 	StatusInternalServerError     StatusCode = 500
 	StatusNotImplemented          StatusCode = 501
@@ -35,6 +36,7 @@ var statusText = map[StatusCode]string{
 	StatusUnauthorized:            "Unauthorized",
 	StatusNotFound:                "Not Found",
 	StatusMethodNotAllowed:        "Method Not Allowed",
+	StatusRequestTimeout:          "Request Timeout",
 	StatusRangeNotSatisfiable:     "Range Not Satisfiable",
 	StatusInternalServerError:     "Internal Server Error",
 	StatusNotImplemented:          "Not Implemented",
@@ -58,16 +60,30 @@ var (
 type Handler func(w *Writer, req *request.Request) error
 
 type Writer struct {
-	writer io.Writer
+	writer      io.Writer
+	shouldClose bool
+	httpVersion string
 }
 
 func NewWriter(w io.Writer) *Writer {
-	return &Writer{writer: w}
+	return &Writer{
+		writer:      w,
+		shouldClose: false,
+		httpVersion: "1.1",
+	}
+}
+
+func (w *Writer) SetHttpVersion(httpVersion string) {
+	w.httpVersion = httpVersion
+}
+
+func (w *Writer) ForceCloseConnection() {
+	w.shouldClose = true
 }
 
 func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 	text := statusCode.String()
-	statusLine := []byte(fmt.Sprintf("HTTP/1.1 %d %s\r\n", statusCode, text))
+	statusLine := []byte(fmt.Sprintf("HTTP/%s %d %s\r\n", w.httpVersion, statusCode, text))
 	if text == "" {
 		return ErrUnrecognizedStatusCode
 	}
@@ -88,8 +104,11 @@ func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 }
 
 func (w *Writer) WriteHeaders(h *headers.Headers) error {
-	b := []byte{}
+	if w.shouldClose {
+		h.Replace("Connection", "close")
+	}
 
+	b := []byte{}
 	h.ForEach(func(name, value string) {
 		b = fmt.Appendf(b, "%s: %s\r\n", name, value)
 	})
@@ -218,7 +237,7 @@ func (w *Writer) WritePartialContentResponse(f io.ReadSeeker, contentSize int, c
 func GetDefaultHeaders(contentLen int) *headers.Headers {
 	h := headers.NewHeaders()
 	h.Set("Content-Length", strconv.Itoa(contentLen))
-	h.Set("Connection", "close")
+	h.Set("Connection", "keep-alive")
 	h.Set("Content-Type", "text/html")
 
 	return h
