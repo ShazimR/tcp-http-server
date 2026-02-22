@@ -16,11 +16,19 @@ import (
 	"github.com/ShazimR/tcp-http-server/internal/router"
 )
 
+type ServerConfig struct {
+	Port        uint16
+	Handler     response.Handler
+	Router      *router.Router
+	ReadTimeout time.Duration
+}
+
 type Server struct {
-	closed   atomic.Bool
-	listener net.Listener
-	handler  response.Handler
-	router   *router.Router
+	closed      atomic.Bool
+	readTimeout time.Duration
+	listener    net.Listener
+	handler     response.Handler
+	router      *router.Router
 }
 
 func (s *Server) Close() error {
@@ -51,7 +59,7 @@ func (s *Server) handle(conn net.Conn) {
 	responseWriter := response.NewWriter(conn)
 
 	for {
-		conn.SetReadDeadline(time.Now().Add(30 * time.Second))
+		conn.SetReadDeadline(time.Now().Add(s.readTimeout))
 
 		r, err := request.RequestFromReader(conn)
 		if errors.Is(err, request.ErrUnsupportedVersion) {
@@ -75,6 +83,7 @@ func (s *Server) handle(conn net.Conn) {
 			h := response.GetDefaultHeaders(len(body))
 			responseWriter.ForceCloseConnection()
 			_ = responseWriter.WriteResponse(response.StatusRequestTimeout, h, body)
+			return
 		}
 		if err != nil {
 			body := []byte(err.Error())
@@ -132,16 +141,26 @@ func (s *Server) listen() {
 }
 
 func Serve(port uint16, handler response.Handler, router *router.Router) (*Server, error) {
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	return ServeWithConfig(&ServerConfig{
+		Port:        port,
+		ReadTimeout: 30 * time.Second,
+		Handler:     handler,
+		Router:      router,
+	})
+}
+
+func ServeWithConfig(config *ServerConfig) (*Server, error) {
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Port))
 	if err != nil {
 		return nil, err
 	}
 
 	server := &Server{
-		closed:   atomic.Bool{},
-		handler:  handler,
-		router:   router,
-		listener: listener,
+		closed:      atomic.Bool{},
+		readTimeout: config.ReadTimeout,
+		handler:     config.Handler,
+		router:      config.Router,
+		listener:    listener,
 	}
 
 	go server.listen()
