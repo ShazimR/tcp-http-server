@@ -101,7 +101,7 @@ func TestServer_HandlesBasicRequest(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+	fmt.Fprint(conn, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
 
 	reader := bufio.NewReader(conn)
 	line, err := reader.ReadString('\n')
@@ -129,7 +129,7 @@ func TestServer_KeepAlive_MultipleRequests(t *testing.T) {
 	defer conn.Close()
 
 	// First request
-	fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+	fmt.Fprint(conn, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
 
 	reader := bufio.NewReader(conn)
 	line, err := reader.ReadString('\n')
@@ -146,7 +146,7 @@ func TestServer_KeepAlive_MultipleRequests(t *testing.T) {
 	assert.Equal(t, "pong", line)
 
 	// Second request on same connection
-	fmt.Fprintf(conn, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+	fmt.Fprint(conn, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
 
 	line, err = reader.ReadString('\n')
 	require.NoError(t, err)
@@ -179,7 +179,7 @@ func TestServer_HTTP10_ClosesConnection(t *testing.T) {
 	conn, err := net.Dial("tcp", addr)
 	require.NoError(t, err)
 
-	fmt.Fprintf(conn, "GET / HTTP/1.0\r\n\r\n")
+	fmt.Fprint(conn, "GET / HTTP/1.0\r\n\r\n")
 
 	reader := bufio.NewReader(conn)
 	// status
@@ -198,4 +198,76 @@ func TestServer_HTTP10_ClosesConnection(t *testing.T) {
 	// Further read should fail
 	_, err = reader.ReadString('\n')
 	assert.Equal(t, io.EOF, err)
+}
+
+func TestServer_RequestTimeout(t *testing.T) {
+	// Use shorter timeout duration for test
+	readTimeout := 50 * time.Millisecond
+
+	handler := func(w *response.Writer, r *request.Request) error {
+		body := []byte("ok")
+		h := headers.NewHeaders()
+		h.Set("Content-Length", strconv.Itoa(len(body)))
+		return w.WriteResponse(response.StatusOK, h, body)
+	}
+
+	config := &ServerConfig{
+		Port:        0,
+		ReadTimeout: readTimeout,
+		Handler:     handler,
+		Router:      nil,
+	}
+	s, err := ServeWithConfig(config)
+	require.NoError(t, err)
+	defer s.Close()
+
+	addr := s.listener.Addr().String()
+
+	conn, err := net.Dial("tcp", addr)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	reader := bufio.NewReader(conn)
+
+	// Send initial request
+	fmt.Fprint(conn, "GET / HTTP/1.1\r\n\r\n")
+
+	line, err := reader.ReadString('\n')
+	require.NoError(t, err)
+	assert.Equal(t, "HTTP/1.1 200 OK\r\n", line)
+	line, err = reader.ReadString('\n')
+	require.NoError(t, err)
+	assert.Equal(t, "content-length: 2\r\n", line)
+	line, err = reader.ReadString('\n')
+	require.NoError(t, err)
+	assert.Equal(t, "\r\n", line)
+	line, err = reader.ReadString('k')
+	require.NoError(t, err)
+	assert.Equal(t, "ok", line)
+
+	// No new request -> expect timeout
+	line, err = reader.ReadString('\n')
+	require.NoError(t, err)
+	assert.Equal(t, "HTTP/1.1 408 Request Timeout\r\n", line)
+	// Headers (content-length, content-type, connection)
+	headers := [3]string{}
+	headers[0], err = reader.ReadString('\n')
+	require.NoError(t, err)
+	headers[1], err = reader.ReadString('\n')
+	require.NoError(t, err)
+	headers[2], err = reader.ReadString('\n')
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"content-length: 46\r\n", "content-type: text/html\r\n", "connection: close\r\n"}, headers)
+	line, err = reader.ReadString('\n')
+	require.NoError(t, err)
+	assert.Equal(t, "\r\n", line)
+	// body
+	body, _, err := reader.ReadLine()
+	require.NoError(t, err)
+	assert.Contains(t, string(body), "i/o timeout")
+
+	// Connection closed -> expect EOF
+	line, err = reader.ReadString('\n')
+	assert.Equal(t, io.EOF, err)
+	assert.Equal(t, "", line)
 }
