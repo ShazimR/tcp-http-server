@@ -79,6 +79,17 @@ Two example servers are provided:
 - Binary-safe parsing and responses
 - Populates:
   - `req.RequestParams`
+- Persistent Connections
+  - HTTP 1.0:
+    - Closes connections by default
+    - Keeps connection alive if `Connection: keep-alive` explicitly requested
+  - HTTP 1.1:
+    - Keeps connections alive by default
+    - Closes connections if `Connection: close` explicitly requested
+  - Request Timeout:
+    - Closes connections after read timeout duration passed with no request (default is 30 seconds)
+    - Returns a `408 Request Timeout` response with `Connection: close`
+    - Configurable server parameter
 
 ### Responses
 - Status line + headers + body
@@ -446,19 +457,16 @@ This project intentionally does **not** implement:
 
 * HTTP/2 or HTTP/3
 * TLS / HTTPS
-* Persistent connections
 * Full RFC compliance
 
 
 ## Future Work
 
-* Persistent connections (`keep-alive`)
 * Request body streaming (avoid full buffering)
 * Automatic `OPTIONS` + `Allow`
 * Compression
 * Improved protocol compliance
 * TLS / HTTPS
-* Fuzz and integration testing
 
 
 ## Why This Project
