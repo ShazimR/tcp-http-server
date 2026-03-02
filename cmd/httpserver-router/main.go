@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
+	"time"
 
 	"github.com/ShazimR/tcp-http-server/internal/request"
 	"github.com/ShazimR/tcp-http-server/internal/response"
@@ -231,22 +233,86 @@ func login(w *response.Writer, req *request.Request) error {
 
 func logger(next response.Handler) response.Handler {
 	return func(w *response.Writer, req *request.Request) error {
+		reqTime := time.Now()
+		err := next(w, req)
+		errStr := ""
+		if err != nil {
+			errStr = fmt.Sprintf("Error from handler: %v\n\n", err)
+		}
+		resTime := time.Now()
+
 		method := req.RequestLine.Method
 		path := req.RequestLine.RequestTarget
 		headerStr := ""
 		req.Headers.ForEach(func(name, value string) {
 			headerStr += fmt.Sprintf("  - %s: %s\n", name, value)
 		})
+		contentType, _ := req.Headers.Get("Content-Type")
 
-		fmt.Printf("Method:      %s\n", method)
-		fmt.Printf("Path:        %s\n", path)
-		fmt.Printf("PathParams:  %s\n", req.PathParams)
-		fmt.Printf("QueryParams: %s\n", req.RequestParams)
-		fmt.Printf("Headers:\n%s", headerStr)
-		fmt.Printf("Body:\n%s\n\n", req.Body)
+		// Prevent printing long bodies
+		const maxLogBody = 4096
+		body := req.Body
+		if len(body) > maxLogBody {
+			body = body[:maxLogBody]
+		}
 
-		return next(w, req)
+		resStat, resH, resB := w.GetLogs()
+		resH, _ = strings.CutSuffix(resH, "\r\n")
+		resS := w.GetStatus()
+		elapsedTime := resTime.Sub(reqTime)
+
+		var elapsedTimeStr string
+		if elapsedTime.Milliseconds() > 0 {
+			elapsedTimeStr = fmt.Sprintf("%d ms", elapsedTime.Milliseconds())
+		} else {
+			elapsedTimeStr = fmt.Sprintf("%d us", elapsedTime.Microseconds())
+		}
+
+		// ANSI colour codes
+		const (
+			blue  = "\033[34m"
+			green = "\033[32m"
+			red   = "\033[31m"
+			reset = "\033[0m"
+		)
+
+		var logs strings.Builder
+		fmt.Fprint(&logs, blue)
+		fmt.Fprintf(&logs, "%s  Request:\n", reqTime.Format(time.RFC1123))
+		fmt.Fprint(&logs, reset)
+		fmt.Fprintf(&logs, "Method:      %s\n", method)
+		fmt.Fprintf(&logs, "Path:        %s\n", path)
+		fmt.Fprintf(&logs, "PathParams:  %s\n", req.PathParams)
+		fmt.Fprintf(&logs, "QueryParams: %s\n", req.RequestParams)
+		fmt.Fprintf(&logs, "Headers:\n%s", headerStr)
+		if contentType != "application/json" && !strings.HasPrefix(contentType, "text/") {
+			// Prevent printing binary directly as a string
+			fmt.Fprintf(&logs, "Body (%d bytes, showing %d):\n% x\n\n", len(req.Body), len(body), body)
+		} else {
+			fmt.Fprintf(&logs, "Body (%d bytes, showing %d):\n%s\n\n", len(req.Body), len(body), body)
+		}
+
+		if errStr != "" {
+			fmt.Fprint(&logs, red)
+			fmt.Fprintf(&logs, "%s Request Handling Error: %s\n\n", resTime.Format(time.RFC1123), errStr)
+			fmt.Fprint(&logs, reset)
+		}
+
+		fmt.Fprint(&logs, green)
+		fmt.Fprintf(&logs, "%s  Response (%d):\n", resTime.Format(time.RFC1123), resS)
+		fmt.Fprint(&logs, reset)
+		fmt.Fprintf(&logs, "%s%s", resStat, resH)
+		fmt.Fprintf(&logs, "Length of Body: %d\n", len(resB))
+		fmt.Fprintf(&logs, "Total Elapsed Time: %s\n\n", elapsedTimeStr)
+
+		printLogs(logs.String())
+		return err
 	}
+}
+
+func printLogs(logs string) {
+	log.Print(logs + "----------------------------------------------------------------" +
+		"--------------------------------\n\n")
 }
 
 func auth(next response.Handler) response.Handler {
@@ -305,13 +371,17 @@ func main() {
 	userPosts.GET("/", echoParams)
 	userPosts.POST("/", echoParams)
 
+	// Setup log
+	log.SetOutput(os.Stdout) // use stdout instead of stderr
+	log.SetFlags(0)          // don't add date/time as the logger handles this
+
 	// Setup and run server
 	s, err := server.Serve(port, nil, r)
 	if err != nil {
 		log.Fatalf("error starting server: %v", err)
 	}
 	defer s.Close()
-	log.Printf("Server started on port: %d", port)
+	log.Printf("Server started on port: %d\n\n", port)
 
 	// Stop server gracefully
 	sigChan := make(chan os.Signal, 1)

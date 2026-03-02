@@ -263,19 +263,19 @@ func (r *Router) Use(mw ...Middleware) {
 func (r *Router) GetHandler(req *request.Request) response.Handler {
 	m := getMethod(req.RequestLine.Method)
 	if m >= methodCount {
-		return notFoundHandler
+		return r.applyMiddleware(notFoundHandler)
 	}
 
 	tokens, err := getTokens(req.RequestLine.RequestTarget)
 	if err != nil {
-		return notFoundHandler
+		return r.applyMiddleware(notFoundHandler)
 	}
 
 	runner := r.routes
 	for _, token := range tokens {
 		node, usedParam := runner.matchChild(token)
 		if node == nil {
-			return notFoundHandler
+			return r.applyMiddleware(notFoundHandler)
 		}
 
 		if usedParam {
@@ -287,17 +287,17 @@ func (r *Router) GetHandler(req *request.Request) response.Handler {
 
 	handler, err := runner.getHandler(m)
 	if err != nil {
-		return notFoundHandler
+		return r.applyMiddleware(notFoundHandler)
 	}
 
 	if handler == nil {
 		for _, h := range runner.handlers {
 			if h != nil {
-				return methodNotAllowedHandler
+				return r.applyMiddleware(methodNotAllowedHandler)
 			}
 		}
 
-		return notFoundHandler
+		return r.applyMiddleware(notFoundHandler)
 	}
 
 	return handler
