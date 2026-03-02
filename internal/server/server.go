@@ -21,6 +21,7 @@ type ServerConfig struct {
 	Handler     response.Handler
 	Router      *router.Router
 	ReadTimeout time.Duration
+	Silent      bool
 }
 
 type Server struct {
@@ -29,6 +30,7 @@ type Server struct {
 	listener    net.Listener
 	handler     response.Handler
 	router      *router.Router
+	silent      bool
 }
 
 func (s *Server) Close() error {
@@ -59,13 +61,20 @@ func (s *Server) handle(conn net.Conn) {
 	responseWriter := response.NewWriter(conn)
 
 	for {
-		conn.SetReadDeadline(time.Now().Add(s.readTimeout))
+		currentTime := time.Now()
+		currentTimeStr := currentTime.Format(time.RFC1123)
+		conn.SetReadDeadline(currentTime.Add(s.readTimeout))
+		responseWriter.ResetLogs()
 
 		r, err := request.RequestFromReader(conn)
 		if errors.Is(err, request.ErrUnsupportedVersion) {
+			status := response.StatusHttpVersionNotSupported
 			body := []byte(err.Error())
 			h := response.GetDefaultHeaders(len(body))
-			_ = responseWriter.WriteResponse(response.StatusHttpVersionNotSupported, h, body)
+			_ = responseWriter.WriteResponse(status, h, body)
+			if !s.silent {
+				log.Printf("%s Request had unsupported version: Returned status %d", currentTimeStr, status)
+			}
 			return
 		}
 		if errors.Is(err, request.ErrMalformedRequestLine) ||
@@ -73,22 +82,34 @@ func (s *Server) handle(conn net.Conn) {
 			errors.Is(err, headers.ErrMalformedHeader) ||
 			errors.Is(err, headers.ErrMalformedHeaderName) ||
 			errors.Is(err, request.ErrMalformedChunkedBody) {
+			status := response.StatusBadRequest
 			body := []byte(err.Error())
 			h := response.GetDefaultHeaders(len(body))
-			_ = responseWriter.WriteResponse(response.StatusBadRequest, h, body)
+			_ = responseWriter.WriteResponse(status, h, body)
+			if !s.silent {
+				log.Printf("%s Request was bad: Returned status %d", currentTimeStr, status)
+			}
 			return
 		}
 		if errors.Is(err, os.ErrDeadlineExceeded) {
+			status := response.StatusRequestTimeout
 			body := []byte(err.Error())
 			h := response.GetDefaultHeaders(len(body))
 			responseWriter.ForceCloseConnection()
-			_ = responseWriter.WriteResponse(response.StatusRequestTimeout, h, body)
+			_ = responseWriter.WriteResponse(status, h, body)
+			if !s.silent {
+				log.Printf("%s Request timed out: Returned status %d", currentTimeStr, status)
+			}
 			return
 		}
 		if err != nil {
+			status := response.StatusInternalServerError
 			body := []byte(err.Error())
 			h := response.GetDefaultHeaders(len(body))
 			_ = responseWriter.WriteResponse(response.StatusInternalServerError, h, body)
+			if !s.silent {
+				log.Printf("%sInternal server error: Returned status %d", currentTimeStr, status)
+			}
 			return
 		}
 
@@ -101,10 +122,13 @@ func (s *Server) handle(conn net.Conn) {
 		} else if s.router != nil {
 			handler = s.router.GetHandler(r)
 		} else {
+			status := response.StatusInternalServerError
 			body := []byte("")
 			h := response.GetDefaultHeaders(len(body))
-			_ = responseWriter.WriteResponse(response.StatusInternalServerError, h, body)
-			log.Printf("handler does not exist")
+			_ = responseWriter.WriteResponse(status, h, body)
+			if !s.silent {
+				log.Printf("%s No handler found for request: Returned status %d", currentTimeStr, status)
+			}
 			return
 		}
 
@@ -115,7 +139,9 @@ func (s *Server) handle(conn net.Conn) {
 			return
 		}
 		if err != nil {
-			log.Printf("error from handler: %v\n", err)
+			if !s.silent {
+				log.Printf("%s Handler Error: %v\n", currentTimeStr, err)
+			}
 			return
 		}
 
@@ -132,7 +158,9 @@ func (s *Server) listen() {
 			if s.closed.Load() {
 				return
 			}
-			log.Printf("error accepting connection %v", err)
+			if !s.silent {
+				log.Printf("%s Error accepting connection: %v", time.Now().Format(time.RFC1123), err)
+			}
 			continue
 		}
 
@@ -146,6 +174,7 @@ func Serve(port uint16, handler response.Handler, router *router.Router) (*Serve
 		ReadTimeout: 30 * time.Second,
 		Handler:     handler,
 		Router:      router,
+		Silent:      false,
 	})
 }
 
@@ -160,6 +189,7 @@ func ServeWithConfig(config *ServerConfig) (*Server, error) {
 		readTimeout: config.ReadTimeout,
 		handler:     config.Handler,
 		router:      config.Router,
+		silent:      config.Silent,
 		listener:    listener,
 	}
 

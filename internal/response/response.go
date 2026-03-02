@@ -59,8 +59,16 @@ var (
 
 type Handler func(w *Writer, req *request.Request) error
 
+type logger struct {
+	status     StatusCode
+	statusLine []byte
+	header     []byte
+	body       []byte
+}
+
 type Writer struct {
 	writer      io.Writer
+	logs        *logger
 	shouldClose bool
 	httpVersion string
 }
@@ -68,9 +76,22 @@ type Writer struct {
 func NewWriter(w io.Writer) *Writer {
 	return &Writer{
 		writer:      w,
+		logs:        &logger{},
 		shouldClose: false,
 		httpVersion: "1.1",
 	}
+}
+
+func (w *Writer) ResetLogs() {
+	w.logs = &logger{}
+}
+
+func (w *Writer) GetLogs() (statusLine string, headers string, body []byte) {
+	return string(w.logs.statusLine), string(w.logs.header), w.logs.body
+}
+
+func (w *Writer) GetStatus() (status StatusCode) {
+	return w.logs.status
 }
 
 func (w *Writer) SetHttpVersion(httpVersion string) {
@@ -83,10 +104,12 @@ func (w *Writer) ForceCloseConnection() {
 
 func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 	text := statusCode.String()
-	statusLine := []byte(fmt.Sprintf("HTTP/%s %d %s\r\n", w.httpVersion, statusCode, text))
+	statusLine := fmt.Appendf(nil, "HTTP/%s %d %s\r\n", w.httpVersion, statusCode, text)
 	if text == "" {
 		return ErrUnrecognizedStatusCode
 	}
+	w.logs.status = statusCode
+	w.logs.statusLine = statusLine
 
 	writeN := 0
 	for writeN < len(statusLine) {
@@ -113,6 +136,7 @@ func (w *Writer) WriteHeaders(h *headers.Headers) error {
 		b = fmt.Appendf(b, "%s: %s\r\n", name, value)
 	})
 	b = fmt.Appendf(b, "\r\n")
+	w.logs.header = b
 
 	writeN := 0
 	for writeN < len(b) {
@@ -130,6 +154,7 @@ func (w *Writer) WriteHeaders(h *headers.Headers) error {
 }
 
 func (w *Writer) WriteBody(p []byte) error {
+	w.logs.body = append(w.logs.body, p...)
 	writeN := 0
 	for writeN < len(p) {
 		n, err := w.writer.Write(p[writeN:])
