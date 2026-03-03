@@ -11,6 +11,13 @@ This project intentionally avoids Go's `net/http` package to explore how HTTP ac
 The focus is on **correctness, clarity, and learning**, not performance or production readiness.
 
 
+## Live Demo
+
+🔗 **https://httpdemo.shazimrahman.dev**
+
+Deployed on AWS EC2 using Docker, reverse-proxied with Nginx, and fronted by Cloudflare (Full Strict TLS).
+
+
 ## Table of Contents
 
 * [Overview](#overview)
@@ -32,6 +39,7 @@ The focus is on **correctness, clarity, and learning**, not performance or produ
 * [Example API Call](#example-api-call)
 * [Static Router Tester](#static-router-tester)
 * [Design Decisions](#design-decisions)
+* [Deployment](#deployment)
 * [Lessons Learned](#lessons-learned)
 * [Non-Goals](#non-goals)
 * [Future Work](#future-work)
@@ -427,6 +435,33 @@ Tests validate observable behavior:
 They intentionally avoid comparing function pointers or internal state, which is brittle and misleading in Go.
 
 
+## Deployment
+
+The demo instance is deployed on:
+
+- **AWS EC2 (Ubuntu)**
+- **Docker container** (multi-stage static Go build)
+- **Nginx reverse proxy**
+- **Let’s Encrypt (origin TLS)**
+- **Cloudflare proxy (Full Strict TLS + CDN)**
+
+### Architecture
+
+```
+Browser
+↓
+Cloudflare (TLS termination + CDN)
+↓
+EC2 (Nginx reverse proxy)
+↓
+Docker container (Go HTTP server)
+```
+
+The application listens on `0.0.0.0:8080` inside the container.
+Nginx proxies public traffic on ports `80/443` to the container.
+Cloudflare provides edge TLS, caching, and IP shielding.
+
+
 ## Lessons Learned
 
 * HTTP is deceptively simple — complexity lives in edge cases.
@@ -471,7 +506,7 @@ This project intentionally does **not** implement:
 
 ## Why This Project
 
-This project exists as a **learning exercise** to deeply understand HTTP and TCP behavior rather than to replace Go's standard libraries.
+This project exists as a **learning exercise** to deeply understand HTTP and TCP behavior rather than to replace Go's standard libraries. The project is also deployed publicly to demonstrate real-world containerization, reverse proxy configuration, and production-style infrastructure setup.
 
 If you understand this code, you understand:
 
