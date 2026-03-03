@@ -108,7 +108,7 @@ func (s *Server) handle(conn net.Conn) {
 			h := response.GetDefaultHeaders(len(body))
 			_ = responseWriter.WriteResponse(response.StatusInternalServerError, h, body)
 			if !s.silent {
-				log.Printf("%sInternal server error: Returned status %d", currentTimeStr, status)
+				log.Printf("%s Internal server error (%v): Returned status %d", currentTimeStr, err, status)
 			}
 			return
 		}
@@ -179,7 +179,7 @@ func Serve(port uint16, handler response.Handler, router *router.Router) (*Serve
 }
 
 func ServeWithConfig(config *ServerConfig) (*Server, error) {
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", config.Port))
+	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.Port))
 	if err != nil {
 		return nil, err
 	}
