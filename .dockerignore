@@ -16,5 +16,5 @@ README.md
 # Build artifacts
 out
 
-# Docker files
-docker-compose
+# Secrets
+*.pem
