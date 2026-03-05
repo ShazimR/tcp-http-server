@@ -40,7 +40,7 @@ var statusText = map[StatusCode]string{
 	StatusRangeNotSatisfiable:     "Range Not Satisfiable",
 	StatusInternalServerError:     "Internal Server Error",
 	StatusNotImplemented:          "Not Implemented",
-	StatusHttpVersionNotSupported: "Http Version Not Supported",
+	StatusHttpVersionNotSupported: "HTTP Version Not Supported",
 }
 
 func (s StatusCode) String() string {

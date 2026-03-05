@@ -215,7 +215,7 @@ func TestServer_RequestTimeout(t *testing.T) {
 		Port:        0,
 		ReadTimeout: readTimeout,
 		Handler:     handler,
-		Router:      nil,
+		Silent:      true,
 	}
 	s, err := ServeWithConfig(config)
 	require.NoError(t, err)
@@ -257,17 +257,120 @@ func TestServer_RequestTimeout(t *testing.T) {
 	require.NoError(t, err)
 	headers[2], err = reader.ReadString('\n')
 	require.NoError(t, err)
-	assert.ElementsMatch(t, []string{"content-length: 46\r\n", "content-type: text/html\r\n", "connection: close\r\n"}, headers)
+	assert.ElementsMatch(t, []string{"content-length: 20\r\n", "content-type: text/html\r\n", "connection: close\r\n"}, headers)
 	line, err = reader.ReadString('\n')
 	require.NoError(t, err)
 	assert.Equal(t, "\r\n", line)
 	// body
 	body, _, err := reader.ReadLine()
 	require.NoError(t, err)
-	assert.Contains(t, string(body), "i/o timeout")
+	assert.Equal(t, string(body), "connection timed out")
 
 	// Connection closed -> expect EOF
 	line, err = reader.ReadString('\n')
 	assert.Equal(t, io.EOF, err)
 	assert.Equal(t, "", line)
+}
+
+func TestServer_MalformedRequest_Returns400AndCloses(t *testing.T) {
+	handler := func(w *response.Writer, r *request.Request) error {
+		return fmt.Errorf("handler should not be called")
+	}
+
+	config := &ServerConfig{
+		Port:    0,
+		Handler: handler,
+		Silent:  true,
+	}
+	s, err := ServeWithConfig(config)
+	require.NoError(t, err)
+	defer s.Close()
+
+	conn, err := net.Dial("tcp", s.listener.Addr().String())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Malformed request line (missing path/version)
+	fmt.Fprint(conn, "GET\r\n\r\n")
+
+	reader := bufio.NewReader(conn)
+	statusLine, err := reader.ReadString('\n')
+	require.NoError(t, err)
+	assert.Equal(t, "HTTP/1.1 400 Bad Request\r\n", statusLine)
+
+	// Drain headers/body until blank line, then expect EOF because server closes.
+	for {
+		line, e := reader.ReadString('\n')
+		require.NoError(t, e)
+		if line == "\r\n" {
+			break
+		}
+	}
+	_, err = reader.ReadString('\n')
+	assert.Equal(t, io.EOF, err)
+}
+
+func TestServer_UnsupportedVersion_Returns505(t *testing.T) {
+	handler := func(w *response.Writer, r *request.Request) error {
+		return fmt.Errorf("handler should not be called")
+	}
+
+	config := &ServerConfig{
+		Port:    0,
+		Handler: handler,
+		Silent:  true,
+	}
+	s, err := ServeWithConfig(config)
+	require.NoError(t, err)
+	defer s.Close()
+
+	conn, err := net.Dial("tcp", s.listener.Addr().String())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	fmt.Fprint(conn, "GET / HTTP/2.0\r\nHost: localhost\r\n\r\n")
+
+	reader := bufio.NewReader(conn)
+	statusLine, err := reader.ReadString('\n')
+	require.NoError(t, err)
+	assert.Equal(t, "HTTP/1.1 505 HTTP Version Not Supported\r\n", statusLine)
+
+	// Should close after unsupported version
+	for {
+		line, e := reader.ReadString('\n')
+		require.NoError(t, e)
+		if line == "\r\n" {
+			break
+		}
+	}
+	_, err = reader.ReadString('\n')
+	assert.Equal(t, io.EOF, err)
+}
+
+func TestServer_HandlerError_ClosesConnection(t *testing.T) {
+	handler := func(w *response.Writer, r *request.Request) error {
+		return fmt.Errorf("boom")
+	}
+
+	config := &ServerConfig{
+		Port:    0,
+		Handler: handler,
+		Silent:  true,
+	}
+	s, err := ServeWithConfig(config)
+	require.NoError(t, err)
+	defer s.Close()
+
+	conn, err := net.Dial("tcp", s.listener.Addr().String())
+	require.NoError(t, err)
+	defer conn.Close()
+
+	fmt.Fprint(conn, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+
+	// Handler returns an error; server should close the connection without sending a response.
+	buf := make([]byte, 1)
+	n, err := conn.Read(buf)
+
+	assert.Equal(t, 0, n)
+	assert.Equal(t, io.EOF, err)
 }
