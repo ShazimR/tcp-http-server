@@ -25,7 +25,7 @@ jobs:
             ./scripts/deploy.sh ${{ github.event.workflow_run.head_sha }}
 
   email-success:
-    if: ${{ needs.deploy.result == 'success' }}
+    if: ${{ always() && needs.deploy.result == 'success' }}
     needs: [deploy]
     runs-on: ubuntu-latest
     steps:
@@ -48,7 +48,7 @@ jobs:
             Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}
 
   email-failure:
-    if: ${{ needs.deploy.result == 'failure' }}
+    if: ${{ always() && needs.deploy.result == 'failure' }}
     needs: [deploy]
     runs-on: ubuntu-latest
     steps:
