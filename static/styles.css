@@ -25,6 +25,41 @@ body {
     padding: 20px 0;
 }
 
+.hero {
+    padding-top: 28px;
+    padding-bottom: 10px;
+}
+
+.eyebrow {
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+}
+
+.hero-lead {
+    margin: 0 0 10px;
+    max-width: 760px;
+    font-size: 15px;
+    line-height: 1.6;
+}
+
+.hero-overview {
+    margin: 0;
+    max-width: 820px;
+    font-size: 14px;
+    line-height: 1.7;
+}
+
+.hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 16px;
+}
+
 .grid {
     display: grid;
     gap: 16px;
