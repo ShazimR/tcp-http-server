@@ -1,0 +1,71 @@
+name: "Deploy to EC2"
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success'}}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            cd ~/tcp-http-server
+            chmod +x ./scripts/deploy.sh
+            ./scripts/deploy.sh ${{ github.event.workflow_run.head_sha }}
+
+  email-success:
+    if: ${{ needs.deploy.result == 'success' }}
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Success Email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_HOST }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "[tcp-http-server] Deploy Succeeded"
+          to: ${{ secrets.DEPLOY_NOTIFY_EMAIL }}
+          from: ${{ secrets.SMTP_FROM }}
+          body: |
+            Deployment succeeded.
+
+            Repository: ${{ github.repository }}
+            Branch: main
+            Commit: ${{ github.event.workflow_run.head_sha }}
+            Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}
+
+  email-failure:
+    if: ${{ needs.deploy.result == 'failure' }}
+    needs: [deploy]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Failure Email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_HOST }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "[tcp-http-server] Deploy Failed"
+          to: ${{ secrets.DEPLOY_NOTIFY_EMAIL }}
+          from: ${{ secrets.SMTP_FROM }}
+          body: |
+            Deployment failed.
+
+            Repository: ${{ github.repository }}
+            Branch: main
+            Commit: ${{ github.event.workflow_run.head_sha }}
+            Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}
