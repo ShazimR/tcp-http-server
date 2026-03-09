@@ -39,6 +39,7 @@ Deployed on AWS EC2 using Docker, reverse-proxied with Nginx, and fronted by Clo
 * [Example API Call](#example-api-call)
 * [Static Router Tester](#static-router-tester)
 * [Design Decisions](#design-decisions)
+* [CI / CD](#ci--cd)
 * [Deployment](#deployment)
 * [Lessons Learned](#lessons-learned)
 * [Non-Goals](#non-goals)
@@ -63,7 +64,7 @@ This project implements a minimal but functional HTTP/1.1 server, including:
 - Router groups and route prefixing
 - Cookie-based authentication demo
 - Graceful shutdown
-- Unit testing, CI, and Docker support
+- Unit/system testing, CI/CD, and Docker support
 
 Two example servers are provided:
 - one **without a router** (manual request handling)
@@ -144,7 +145,8 @@ Example uses implemented:
 
 ### Tooling
 - Unit tests for core components
-- GitHub Actions workflow for build and tests
+- GitHub Actions CI for build, tests, race tests, and Docker build validation
+- GitHub Actions CD to deploy successful `main` commits to `EC2`
 - Dockerfile and docker-compose support
 
 
@@ -435,6 +437,40 @@ Tests validate observable behavior:
 They intentionally avoid comparing function pointers or internal state, which is brittle and misleading in Go.
 
 
+## CI / CD
+
+### Continuous Integration
+
+GitHub Actions CI runs on:
+
+- pushes to `main`
+- pull requests targeting `main`
+
+The pipeline validates:
+
+- Go build
+- unit tests
+- race tests
+- Docker image build
+- Docker Compose build
+
+This ensures changes are validated before merge and that the project remains buildable both locally and in its containerized form.
+
+### Continuous Deployment
+
+A separate GitHub Actions deployment workflow (Deploy to EC2) runs after CI succeeds on `main`.
+
+The deployment pipeline:
+
+- connects to the EC2 instance over SSH
+- checks out the exact commit SHA that passed CI
+- rebuilds and restarts the Dockerized application
+- runs a local health check against the deployed server
+- rolls back to the previous commit if deployment fails
+
+Deployment notifications are sent by email for both success and failure.
+
+
 ## Deployment
 
 The demo instance is deployed on:
@@ -460,6 +496,8 @@ Docker container (Go HTTP server)
 The application listens on `0.0.0.0:8080` inside the container.
 Nginx proxies public traffic on ports `80/443` to the container.
 Cloudflare provides edge TLS, caching, and IP shielding.
+
+The live demo is updated automatically from GitHub after successful CI on `main`, using a simple SSH-based deployment flow with rollback and post-deploy health checks.
 
 
 ## Lessons Learned
