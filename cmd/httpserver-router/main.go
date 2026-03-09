@@ -329,10 +329,16 @@ func auth(next response.Handler) response.Handler {
 	}
 }
 
+func force400(_ response.Handler) response.Handler {
+	return func(w *response.Writer, req *request.Request) error {
+		return w.WriteResponse(response.StatusBadRequest, response.GetDefaultHeaders(0), []byte{})
+	}
+}
+
 func main() {
 	// Routers
 	r := router.NewRouter()
-	r.Use(logger)
+	r.Use(logger, force400)
 	api := r.Group("/api")
 	api.Use(auth)
 	echoRouter := api.Group("/echo")
