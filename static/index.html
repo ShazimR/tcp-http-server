@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>tcp-http-server Demo</title>
+  <title>HTTP From Scratch Demo</title>
 
   <link rel="icon" href="/favicon.ico" />
   <link rel="stylesheet" href="/styles.css" />
@@ -13,8 +13,8 @@
 <body>
   <header class="container hero">
     <div class="hero-copy">
-      <p class="eyebrow">tcp-http-server demo</p>
-      <h1>HTTP/1.1 over raw TCP</h1>
+      <p class="eyebrow">Network Protocol Implementation</p>
+      <h1>HTTP/1.1 Over Raw TCP</h1>
       <p class="muted hero-lead">
         A from-scratch HTTP/1.1 server written in Go, built directly on top of TCP sockets
         without <code>net/http</code>.
@@ -23,6 +23,12 @@
         This demo site exercises request parsing, routing, path/query parameter handling,
         static file serving, chunked transfer encoding, media streaming, and a simple
         cookie-based login flow.
+      </p>
+      <p class="muted hero-overview">
+        View the source code on
+        <a href="https://github.com/ShazimR/tcp-http-server" target="_blank" rel="noopener noreferrer">
+          Github
+        </a>
       </p>
     </div>
 
