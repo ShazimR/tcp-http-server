@@ -34,14 +34,20 @@ jobs:
           RESEND_API_KEY: ${{ secrets.SMTP_PASSWORD }}
           DEPLOY_NOTIFY_EMAIL: ${{ secrets.DEPLOY_NOTIFY_EMAIL }}
         run: |
+          DEPLOY_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
+          REPO_URL="${{ github.server_url }}/${{ github.repository }}"
+          COMMIT_URL="${REPO_URL}/commit/${{ github.event.workflow_run.head_sha }}"
+          RUN_URL="${REPO_URL}/actions/runs/${{ github.event.workflow_run.id }}"
+
           curl -sS https://api.resend.com/emails \
             -H "Authorization: Bearer ${RESEND_API_KEY}" \
             -H "Content-Type: application/json" \
             -d '{
               "from": "deploy@shazimrahman.dev",
               "to": ["'"${DEPLOY_NOTIFY_EMAIL}"'"],
-              "subject": "[tcp-http-server] Deploy Succeeded",
-              "text": "Deployment succeeded.\n\nRepository: ${{ github.repository }}\nBranch: main\nCommit: ${{ github.event.workflow_run.head_sha }}\nWorkflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}"
+              "subject": "[tcp-http-server] 🚀 DEPLOY SUCCEEDED",
+              "text": "Deployment succeeded.\n\nRepository:\n'"${REPO_URL}"'\n\nCommit:\n'"${COMMIT_URL}"'\n\nActor: ${{ github.event.workflow_run.actor.login }}\nDeploy Time: '"${DEPLOY_TIME}"'\n\nLive Server:\nhttps://httpdemo.shazimrahman.dev\n\nWorkflow Run:\n'"${RUN_URL}"'"
             }'
 
   email-failure:
@@ -54,12 +60,18 @@ jobs:
           RESEND_API_KEY: ${{ secrets.SMTP_PASSWORD }}
           DEPLOY_NOTIFY_EMAIL: ${{ secrets.DEPLOY_NOTIFY_EMAIL }}
         run: |
+          DEPLOY_TIME=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+
+          REPO_URL="${{ github.server_url }}/${{ github.repository }}"
+          COMMIT_URL="${REPO_URL}/commit/${{ github.event.workflow_run.head_sha }}"
+          RUN_URL="${REPO_URL}/actions/runs/${{ github.event.workflow_run.id }}"
+
           curl -sS https://api.resend.com/emails \
             -H "Authorization: Bearer ${RESEND_API_KEY}" \
             -H "Content-Type: application/json" \
             -d '{
               "from": "deploy@shazimrahman.dev",
               "to": ["'"${DEPLOY_NOTIFY_EMAIL}"'"],
-              "subject": "[tcp-http-server] Deploy Failed",
-              "text": "Deployment failed.\n\nRepository: ${{ github.repository }}\nBranch: main\nCommit: ${{ github.event.workflow_run.head_sha }}\nWorkflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}"
+              "subject": "[tcp-http-server] ❌ DEPLOY FAILED",
+              "text": "Deployment failed.\n\nRepository:\n'"${REPO_URL}"'\n\nCommit:\n'"${COMMIT_URL}"'\n\nActor: ${{ github.event.workflow_run.actor.login }}\nDeploy Time: '"${DEPLOY_TIME}"'\n\nLive Server:\nhttps://httpdemo.shazimrahman.dev\n\nWorkflow Run:\n'"${RUN_URL}"'"
             }'
