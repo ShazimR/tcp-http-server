@@ -38,7 +38,7 @@ jobs:
           password: ${{ secrets.SMTP_PASSWORD }}
           subject: "[tcp-http-server] Deploy Succeeded"
           to: ${{ secrets.DEPLOY_NOTIFY_EMAIL }}
-          from: ${{ secrets.SMTP_FROM }}
+          from: deploy@shazimrahman.dev
           body: |
             Deployment succeeded.
 
