@@ -13,6 +13,7 @@ log() {
 }
 
 rollback() {
+    trap - ERR
     local exit_code=$?
     if [[ -n "${PREV_SHA:-}" ]]; then
         log "Deploy failed. Rolling back to ${PREV_SHA}..."

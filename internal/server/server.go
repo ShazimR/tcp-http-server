@@ -76,7 +76,7 @@ func (s *Server) handle(conn net.Conn) {
 			h := response.GetDefaultHeaders(len(body))
 			_ = responseWriter.WriteResponse(status, h, body)
 			if !s.silent {
-				log.Printf("%s INFO: Request had unsupported version (%v); Returned status %d\n\n", currentTimeStr, err, status)
+				log.Printf("[%s] INFO: Request had unsupported version (%v); Returned status %d;\n\n", currentTimeStr, err, status)
 			}
 			return
 
@@ -90,7 +90,7 @@ func (s *Server) handle(conn net.Conn) {
 			h := response.GetDefaultHeaders(len(body))
 			_ = responseWriter.WriteResponse(status, h, body)
 			if !s.silent {
-				log.Printf("%s INFO: Request was bad (%v); Returned status %d\n\n", currentTimeStr, err, status)
+				log.Printf("[%s] INFO: Request was bad (%v); Returned status %d;\n\n", currentTimeStr, err, status)
 			}
 			return
 
@@ -101,7 +101,7 @@ func (s *Server) handle(conn net.Conn) {
 			responseWriter.ForceCloseConnection()
 			_ = responseWriter.WriteResponse(status, h, body)
 			if !s.silent {
-				log.Printf("%s INFO: Request from client timed out (%v); Returned status %d; Closing connection\n\n", currentTimeStr, err, status)
+				log.Printf("[%s] INFO: Request from client timed out (%v); Returned status %d; Closing connection;\n\n", currentTimeStr, err, status)
 			}
 			return
 
@@ -110,7 +110,7 @@ func (s *Server) handle(conn net.Conn) {
 			errors.Is(err, io.EOF) ||
 			errors.Is(err, net.ErrClosed) {
 			if !s.silent {
-				log.Printf("%s INFO: Client disconnected while reading request (%v); Closing connection\n\n", currentTimeStr, err)
+				log.Printf("[%s] INFO: Client disconnected while reading request (%v); Closing connection;\n\n", currentTimeStr, err)
 			}
 			return
 
@@ -121,7 +121,7 @@ func (s *Server) handle(conn net.Conn) {
 			responseWriter.ForceCloseConnection()
 			_ = responseWriter.WriteResponse(status, h, body)
 			if !s.silent {
-				log.Printf("%s ERROR: Internal server error (%v); Returned status %d; Closing connection\n\n", currentTimeStr, err, status)
+				log.Printf("[%s] ERROR: Internal server error (%v); Returned status %d; Closing connection;\n\n", currentTimeStr, err, status)
 			}
 			return
 		}
@@ -141,7 +141,7 @@ func (s *Server) handle(conn net.Conn) {
 			responseWriter.ForceCloseConnection()
 			_ = responseWriter.WriteResponse(status, h, body)
 			if !s.silent {
-				log.Printf("%s ERROR: No handler found for request; Returned status %d\n\n; Closing connection", currentTimeStr, status)
+				log.Printf("[%s] ERROR: No handler found for request; Returned status %d\n\n; Closing connection;\n\n", currentTimeStr, status)
 			}
 			return
 		}
@@ -152,14 +152,14 @@ func (s *Server) handle(conn net.Conn) {
 			errors.Is(err, io.EOF) ||
 			errors.Is(err, net.ErrClosed) {
 			if !s.silent {
-				log.Printf("%s INFO: Client disconnected while writing response (%v); Closing connection\n\n", currentTimeStr, err)
+				log.Printf("[%s] INFO: Client disconnected while writing response (%v); Closing connection;\n\n", currentTimeStr, err)
 			}
 			return
 		}
 		if err != nil {
 			// Unknown state of response -> force close without sending a response
 			if !s.silent {
-				log.Printf("%s ERROR: Handler Error (%v)\n\n; Closing connection", currentTimeStr, err)
+				log.Printf("[%s] ERROR: Handler Error (%v)\n\n; Closing connection;\n\n", currentTimeStr, err)
 			}
 			return
 		}
@@ -178,7 +178,7 @@ func (s *Server) listen() {
 				return
 			}
 			if !s.silent {
-				log.Printf("%s ERROR: Failed to accept connection (%v)\n\n", time.Now().Format(time.RFC1123), err)
+				log.Printf("[%s] ERROR: Failed to accept connection (%v);\n\n", time.Now().Format(time.RFC1123), err)
 			}
 			continue
 		}
