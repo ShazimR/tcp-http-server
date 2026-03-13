@@ -30,22 +30,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Send Success Email
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_HOST }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "[tcp-http-server] Deploy Succeeded"
-          to: ${{ secrets.DEPLOY_NOTIFY_EMAIL }}
-          from: deploy@shazimrahman.dev
-          body: |
-            Deployment succeeded.
-
-            Repository: ${{ github.repository }}
-            Branch: main
-            Commit: ${{ github.event.workflow_run.head_sha }}
-            Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}
+        env:
+          RESEND_API_KEY: ${{ secrets.SMTP_PASSWORD }}
+          DEPLOY_NOTIFY_EMAIL: ${{ secrets.DEPLOY_NOTIFY_EMAIL }}
+        run: |
+          curl -sS https://api.resend.com/emails \
+            -H "Authorization: Bearer ${RESEND_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "from": "deploy@shazimrahman.dev",
+              "to": ["'"${DEPLOY_NOTIFY_EMAIL}"'"],
+              "subject": "[tcp-http-server] Deploy Succeeded",
+              "text": "Deployment succeeded.\n\nRepository: ${{ github.repository }}\nBranch: main\nCommit: ${{ github.event.workflow_run.head_sha }}\nWorkflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}"
+            }'
 
   email-failure:
     if: ${{ always() && needs.deploy.result == 'failure' }}
@@ -53,19 +50,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Send Failure Email
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_HOST }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: "[tcp-http-server] Deploy Failed"
-          to: ${{ secrets.DEPLOY_NOTIFY_EMAIL }}
-          from: ${{ secrets.SMTP_FROM }}
-          body: |
-            Deployment failed.
-
-            Repository: ${{ github.repository }}
-            Branch: main
-            Commit: ${{ github.event.workflow_run.head_sha }}
-            Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}
+        env:
+          RESEND_API_KEY: ${{ secrets.SMTP_PASSWORD }}
+          DEPLOY_NOTIFY_EMAIL: ${{ secrets.DEPLOY_NOTIFY_EMAIL }}
+        run: |
+          curl -sS https://api.resend.com/emails \
+            -H "Authorization: Bearer ${RESEND_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "from": "deploy@shazimrahman.dev",
+              "to": ["'"${DEPLOY_NOTIFY_EMAIL}"'"],
+              "subject": "[tcp-http-server] Deploy Failed",
+              "text": "Deployment failed.\n\nRepository: ${{ github.repository }}\nBranch: main\nCommit: ${{ github.event.workflow_run.head_sha }}\nWorkflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.event.workflow_run.id }}"
+            }'
